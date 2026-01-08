@@ -28,7 +28,18 @@ export const StepAnalysis: React.FC<Props> = React.memo(({ analysis, onUpdate, o
   const [editPromptModal, setEditPromptModal] = useState<{
     sectionId: string;
     prompt: string;
+    backgroundType: string;  // 배경 선택 옵션
   } | null>(null);
+
+  // 배경 선택 옵션
+  const backgroundOptions = [
+    { value: 'original', label: '배경 유지 (기본)', promptSuffix: '' },
+    { value: 'nature', label: '자연 배경', promptSuffix: ', natural outdoor background with greenery, trees, and soft natural sunlight' },
+    { value: 'city_street', label: '도시 스트리트', promptSuffix: ', urban city street background with modern buildings and trendy urban atmosphere' },
+    { value: 'cafe', label: '카페', promptSuffix: ', cozy cafe interior background with warm ambient lighting and coffee shop atmosphere' },
+    { value: 'airport', label: '공항', promptSuffix: ', modern airport terminal background with bright natural lighting and travel atmosphere' },
+    { value: 'office', label: '오피스', promptSuffix: ', professional modern office interior background with clean workspace aesthetic' },
+  ];
 
   // 이미지 확대 모달 상태 (Pan & Zoom 기능 포함)
   const [imageViewModal, setImageViewModal] = useState<{
@@ -241,7 +252,8 @@ export const StepAnalysis: React.FC<Props> = React.memo(({ analysis, onUpdate, o
     const section = analysis.sections.find(s => s.id === sectionId);
     setEditPromptModal({
       sectionId,
-      prompt: section?.imagePrompt || ''
+      prompt: section?.imagePrompt || '',
+      backgroundType: 'original'  // 기본값: 배경 유지
     });
   }, [analysis.sections]);
 
@@ -249,10 +261,20 @@ export const StepAnalysis: React.FC<Props> = React.memo(({ analysis, onUpdate, o
   const handleConfirmEditPrompt = useCallback(() => {
     if (!editPromptModal) return;
 
-    const { sectionId, prompt } = editPromptModal;
+    const { sectionId, prompt, backgroundType } = editPromptModal;
+
+    // 배경 옵션에 따른 프롬프트 조합
+    const selectedBackground = backgroundOptions.find(opt => opt.value === backgroundType);
+    const finalPrompt = selectedBackground?.promptSuffix
+      ? `${prompt.trim()}${selectedBackground.promptSuffix}`
+      : prompt;
+
+    console.log('[EditPrompt] 배경 선택:', backgroundType);
+    console.log('[EditPrompt] 최종 프롬프트:', finalPrompt.slice(0, 150) + '...');
+
     setEditPromptModal(null);
-    handleGeneratePreview(sectionId, prompt);
-  }, [editPromptModal, handleGeneratePreview]);
+    handleGeneratePreview(sectionId, finalPrompt);
+  }, [editPromptModal, handleGeneratePreview, backgroundOptions]);
 
   // 이미지 미리보기 제거
   const handleRemovePreview = useCallback((sectionId: string) => {
@@ -1577,21 +1599,53 @@ export const StepAnalysis: React.FC<Props> = React.memo(({ analysis, onUpdate, o
                 <p className="text-indigo-100 text-sm mt-1">프롬프트를 수정하고 새로운 이미지를 생성합니다.</p>
               </div>
 
-              <div className="p-6">
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  이미지 생성 프롬프트 (한국어/영어 가능)
-                </label>
-                <textarea
-                  rows={5}
-                  value={editPromptModal.prompt}
-                  onChange={(e) => setEditPromptModal({ ...editPromptModal, prompt: e.target.value })}
-                  className="w-full border border-gray-300 rounded-lg p-3 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none"
-                  placeholder="예: 나무 테이블 위의 상품, 미니멀한 배경, 고품질 사진"
-                />
-                <p className="text-xs text-gray-500 mt-2">
+              <div className="p-6 space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    이미지 생성 프롬프트 (한국어/영어 가능)
+                  </label>
+                  <textarea
+                    rows={5}
+                    value={editPromptModal.prompt}
+                    onChange={(e) => setEditPromptModal({ ...editPromptModal, prompt: e.target.value })}
+                    className="w-full border border-gray-300 rounded-lg p-3 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none"
+                    placeholder="예: 나무 테이블 위의 상품, 미니멀한 배경, 고품질 사진"
+                  />
+                </div>
+
+                {/* 배경 선택 드롭다운 */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center">
+                    <ImageIcon className="w-4 h-4 mr-1.5 text-indigo-500" />
+                    이미지 배경 선택
+                  </label>
+                  <select
+                    value={editPromptModal.backgroundType}
+                    onChange={(e) => setEditPromptModal({
+                      ...editPromptModal,
+                      backgroundType: e.target.value
+                    })}
+                    className="w-full border border-gray-300 rounded-lg p-3 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none bg-white cursor-pointer"
+                  >
+                    {backgroundOptions.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                  {editPromptModal.backgroundType !== 'original' && (
+                    <p className="text-xs text-indigo-600 mt-1.5 flex items-center">
+                      <Sparkles className="w-3 h-3 mr-1" />
+                      선택한 배경 스타일이 프롬프트에 자동 적용됩니다.
+                    </p>
+                  )}
+                </div>
+
+                <p className="text-xs text-gray-500">
                   💡 팁: 구체적인 설명을 추가할수록 원하는 이미지를 얻을 수 있습니다.
                 </p>
               </div>
+
 
               <div className="bg-gray-50 px-6 py-4 flex justify-end gap-3">
                 <button
