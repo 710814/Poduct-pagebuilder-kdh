@@ -1,7 +1,57 @@
 export enum AppMode {
   CREATION = 'CREATION', // Mode A: New Creation from Image
   LOCALIZATION = 'LOCALIZATION', // Mode B: Localization/Reconstruction
-  IMAGE_EDIT = 'IMAGE_EDIT', // Mode C: Single Image Edit (Translate/Remove Text)
+  IMAGE_EDIT = 'IMAGE_EDIT', // Mode C: Image Enhancement (Background, Model Shot, etc.)
+}
+
+// ============================================
+// 이미지 고도화 타입 (Image Enhancement Types)
+// ============================================
+
+/**
+ * 이미지 고도화 유형
+ */
+export type ImageEnhancementType =
+  | 'background_change'  // 배경 변경
+  | 'model_shot'         // 모델컷 생성
+  | 'lifestyle'          // 라이프스타일 연출
+  | 'multi_angle'        // 다양한 앵글
+  | 'remove_bg';         // 누끼 따기 (배경 제거)
+
+/**
+ * 배경 유형
+ */
+export type BackgroundType =
+  | 'studio_white'       // 화이트 스튜디오
+  | 'studio_gray'        // 그레이 스튜디오
+  | 'nature'             // 자연 배경
+  | 'city'               // 도시 배경
+  | 'cafe'               // 카페 배경
+  | 'home'               // 홈 인테리어
+  | 'abstract'           // 추상적 배경
+  | 'custom';            // 사용자 정의
+
+/**
+ * 이미지 고도화 옵션
+ */
+export interface ImageEnhancementOptions {
+  type: ImageEnhancementType;
+  backgroundType?: BackgroundType;
+  modelSettings?: ModelSettings;  // 기존 타입 재사용
+  customPrompt?: string;
+  generateCount?: number;  // 생성할 이미지 수 (기본 1)
+}
+
+/**
+ * 이미지 고도화 결과
+ */
+export interface ImageEnhancementResult {
+  id: string;
+  originalImageUrl: string;
+  enhancedImageUrl: string;
+  type: ImageEnhancementType;
+  prompt: string;
+  createdAt: number;
 }
 
 export enum Step {

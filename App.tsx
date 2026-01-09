@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useMemo, useEffect } from 'react';
-import { AppMode, Step, UploadedFile, ProductAnalysis, ProductInputData } from './types';
+import { AppMode, Step, UploadedFile, ProductAnalysis, ProductInputData, ImageEnhancementOptions, ImageEnhancementType } from './types';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { ToastProvider, useToastContext } from './contexts/ToastContext';
 import { StepModeSelection } from './components/StepModeSelection';
@@ -7,9 +7,11 @@ import { StepUpload } from './components/StepUpload';
 import { StepAnalysis } from './components/StepAnalysis';
 import { StepResult } from './components/StepResult';
 import { StepImageEditResult } from './components/StepImageEditResult';
+import { StepImageEnhancement } from './components/StepImageEnhancement';
+import { ImageEnhancementResult } from './components/ImageEnhancementResult';
 import { SettingsModal } from './components/SettingsModal';
 import { GeneratingProgress, GenerationProgress } from './components/GeneratingProgress';
-import { analyzeProductImage, generateSectionImage, editSingleImageWithProgress, findMatchingColorOption, buildCollagePrompt } from './services/geminiService';
+import { analyzeProductImage, generateSectionImage, editSingleImageWithProgress, findMatchingColorOption, buildCollagePrompt, enhanceProductImage } from './services/geminiService';
 import { getTemplates, initializeBuiltInTemplates } from './services/templateService';
 import {
   isAutoBackupEnabled,
@@ -46,6 +48,10 @@ const AppContent: React.FC = () => {
 
   // Toast 알림 시스템
   const toast = useToastContext();
+
+  // C모드: 이미지 고도화 상태
+  const [enhancementOptions, setEnhancementOptions] = useState<ImageEnhancementOptions | null>(null);
+  const [enhancedImageUrl, setEnhancedImageUrl] = useState<string>('');
 
   // 앱 시작 시 빌트인 템플릿 초기화 및 자동 복원 시도
   useEffect(() => {
@@ -86,7 +92,61 @@ const AppContent: React.FC = () => {
 
   const handleModeSelect = useCallback((selectedMode: AppMode) => {
     setMode(selectedMode);
-    setStep(Step.UPLOAD_DATA);
+    // C모드: 이미지 고도화는 전용 UI 사용
+    if (selectedMode === AppMode.IMAGE_EDIT) {
+      setStep(Step.UPLOAD_DATA); // StepImageEnhancement 렌더링
+    } else {
+      setStep(Step.UPLOAD_DATA);
+    }
+  }, []);
+
+  // C모드: 이미지 고도화 제출 핸들러
+  const handleImageEnhance = useCallback(async (file: UploadedFile, options: ImageEnhancementOptions) => {
+    setUploadedFiles([file]);
+    setEnhancementOptions(options);
+    setStep(Step.GENERATING);
+    setIsLoading(true);
+
+    try {
+      setLoadingMessage('상품 이미지를 분석하고 있습니다...');
+      console.log('[Mode C] 이미지 고도화 시작:', options.type);
+
+      const resultUrl = await enhanceProductImage(
+        file.base64,
+        file.mimeType,
+        options,
+        (step, message) => {
+          setLoadingMessage(message);
+          console.log(`[Mode C] ${step}: ${message}`);
+        }
+      );
+
+      setEnhancedImageUrl(resultUrl);
+      setStep(Step.RESULT);
+      toast.success('이미지 고도화가 완료되었습니다!');
+    } catch (error) {
+      console.error('[Mode C] Error:', error);
+      const errorMessage = error instanceof Error ? error.message : '이미지 생성 중 오류가 발생했습니다.';
+      toast.error(errorMessage);
+      setStep(Step.UPLOAD_DATA);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [toast]);
+
+  // C모드: 다시 생성 핸들러
+  const handleGenerateMore = useCallback(() => {
+    if (uploadedFiles.length > 0 && enhancementOptions) {
+      handleImageEnhance(uploadedFiles[0], enhancementOptions);
+    }
+  }, [uploadedFiles, enhancementOptions, handleImageEnhance]);
+
+  // C모드: 모드 선택으로 돌아가기
+  const goBackToModeSelection = useCallback(() => {
+    setStep(Step.SELECT_MODE);
+    setUploadedFiles([]);
+    setEnhancedImageUrl('');
+    setEnhancementOptions(null);
   }, []);
 
   // 상품 정보 상태 (새로운 Phase 7 데이터)
@@ -545,25 +605,25 @@ const AppContent: React.FC = () => {
           />
         )}
 
-        {/* 모드 C: 이미지 수정 중 로딩 화면 */}
-        {step === Step.GENERATING && mode === AppMode.IMAGE_EDIT && !analysisResult && (
+        {/* 모드 C: 이미지 고도화 중 로딩 화면 */}
+        {step === Step.GENERATING && mode === AppMode.IMAGE_EDIT && (
           <div className="flex flex-col items-center justify-center h-[60vh]">
-            <Loader2 className="w-16 h-16 text-green-600 animate-spin mb-6" />
-            <h3 className="text-xl font-semibold text-gray-900 mb-2">이미지 분석 및 수정 중...</h3>
-            <p className="text-gray-500 animate-pulse mb-4">{loadingMessage || '이미지의 외국어 텍스트를 감지하고 있습니다...'}</p>
+            <Loader2 className="w-16 h-16 text-purple-600 animate-spin mb-6" />
+            <h3 className="text-xl font-semibold text-gray-900 mb-2">이미지 고도화 중...</h3>
+            <p className="text-gray-500 animate-pulse mb-4">{loadingMessage || '상품 이미지를 분석하고 있습니다...'}</p>
             <div className="max-w-md mx-auto bg-white rounded-lg shadow-sm border border-gray-200 p-6 mt-4">
               <div className="space-y-3">
                 <div className="flex items-center text-sm text-gray-600">
-                  <div className="w-2 h-2 bg-green-500 rounded-full mr-2 animate-pulse"></div>
-                  이미지 분석 중...
+                  <div className="w-2 h-2 bg-purple-500 rounded-full mr-2 animate-pulse"></div>
+                  상품 특징 분석 중...
                 </div>
                 <div className="flex items-center text-sm text-gray-400">
                   <div className="w-2 h-2 bg-gray-300 rounded-full mr-2"></div>
-                  텍스트 감지 및 번역 가능 여부 판단
+                  AI 이미지 생성 준비
                 </div>
                 <div className="flex items-center text-sm text-gray-400">
                   <div className="w-2 h-2 bg-gray-300 rounded-full mr-2"></div>
-                  수정된 이미지 생성 중
+                  고품질 이미지 생성 중
                 </div>
               </div>
             </div>
@@ -630,7 +690,21 @@ const AppContent: React.FC = () => {
         ) : (
           <>
             {step === Step.SELECT_MODE && <StepModeSelection onSelectMode={handleModeSelect} />}
-            {step === Step.UPLOAD_DATA && <StepUpload mode={mode} onProductSubmit={handleProductSubmit} />}
+
+            {/* C모드: 이미지 고도화 전용 UI */}
+            {step === Step.UPLOAD_DATA && mode === AppMode.IMAGE_EDIT && (
+              <StepImageEnhancement
+                onSubmit={handleImageEnhance}
+                onBack={goBackToModeSelection}
+                isLoading={isLoading}
+              />
+            )}
+
+            {/* A/B모드: 기존 업로드 UI */}
+            {step === Step.UPLOAD_DATA && mode !== AppMode.IMAGE_EDIT && (
+              <StepUpload mode={mode} onProductSubmit={handleProductSubmit} />
+            )}
+
             {step === Step.ANALYSIS_REVIEW && analysisResult && (
               <StepAnalysis
                 analysis={analysisResult}
@@ -642,24 +716,29 @@ const AppContent: React.FC = () => {
                 productInputData={productInputData}
               />
             )}
-            {step === Step.RESULT && analysisResult && (
-              mode === AppMode.IMAGE_EDIT ? (
-                <StepImageEditResult
-                  originalImageUrl={uploadedFiles[0]?.previewUrl || uploadedFiles[0]?.imageUrl || ''}
-                  editedImageUrl={analysisResult.sections[0]?.imageUrl || ''}
-                  onRestart={restart}
-                />
-              ) : (
-                <StepResult
-                  data={analysisResult}
-                  onRestart={restart}
-                  onGoBack={goBack}
-                  mode={mode}
-                  uploadedFiles={uploadedFiles}
-                  onUpdate={setAnalysisResult}
-                  onOpenSettings={handleOpenSettings}
-                />
-              )
+
+            {/* C모드: 이미지 고도화 결과 */}
+            {step === Step.RESULT && mode === AppMode.IMAGE_EDIT && enhancedImageUrl && (
+              <ImageEnhancementResult
+                originalImageUrl={uploadedFiles[0]?.previewUrl || ''}
+                enhancedImageUrl={enhancedImageUrl}
+                enhancementType={enhancementOptions?.type || 'background_change'}
+                onRestart={goBackToModeSelection}
+                onGenerateMore={handleGenerateMore}
+              />
+            )}
+
+            {/* A/B모드: 기존 결과 UI */}
+            {step === Step.RESULT && mode !== AppMode.IMAGE_EDIT && analysisResult && (
+              <StepResult
+                data={analysisResult}
+                onRestart={restart}
+                onGoBack={goBack}
+                mode={mode}
+                uploadedFiles={uploadedFiles}
+                onUpdate={setAnalysisResult}
+                onOpenSettings={handleOpenSettings}
+              />
             )}
             {/* 디버깅: step이 예상과 다른 경우 (GENERATING 제외) */}
             {step !== Step.SELECT_MODE && step !== Step.UPLOAD_DATA && step !== Step.ANALYSIS_REVIEW && step !== Step.RESULT && step !== Step.GENERATING && (

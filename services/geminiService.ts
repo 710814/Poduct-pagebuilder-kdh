@@ -2061,3 +2061,231 @@ High quality, 4K resolution, professional fashion photography, editorial style.
     return `https://picsum.photos/800/800?random=${Math.random()}`;
   }
 };
+
+// ============================================
+// 이미지 고도화 기능 (C모드)
+// ============================================
+
+import type {
+  ImageEnhancementType,
+  BackgroundType,
+  ImageEnhancementOptions,
+  ModelSettings
+} from "../types";
+
+/**
+ * 배경 유형별 프롬프트 매핑
+ */
+const BACKGROUND_PROMPTS: Record<BackgroundType, string> = {
+  studio_white: 'clean white studio background, professional soft lighting, subtle shadows',
+  studio_gray: 'elegant gray gradient studio background, professional lighting, modern aesthetic',
+  nature: 'beautiful outdoor natural background, soft sunlight filtering through trees, greenery, fresh and inviting atmosphere',
+  city: 'modern city street background, urban style, soft bokeh effect, fashionable atmosphere',
+  cafe: 'cozy cafe interior background, warm ambient lighting, wooden textures, comfortable atmosphere',
+  home: 'modern minimalist home interior, clean and bright, lifestyle setting',
+  abstract: 'artistic abstract gradient background, smooth color transitions, modern and stylish',
+  custom: ''
+};
+
+/**
+ * 이미지 고도화 유형별 프롬프트 템플릿
+ */
+const ENHANCEMENT_PROMPT_TEMPLATES: Record<ImageEnhancementType, (product: string, options: ImageEnhancementOptions, modelDesc: string) => string> = {
+  background_change: (product, options, _) => {
+    const bgPrompt = options.backgroundType ? BACKGROUND_PROMPTS[options.backgroundType] : BACKGROUND_PROMPTS.studio_white;
+    return `Professional product photography of ${product}. 
+${bgPrompt}. 
+The product must be clearly visible and be the main focus. 
+High quality, 4K resolution, e-commerce ready photography.
+${options.customPrompt || ''}`.trim();
+  },
+
+  model_shot: (product, options, modelDesc) => {
+    const modelDescription = modelDesc || 'a professional model';
+    return `Fashion photography of ${modelDescription} wearing/holding ${product}.
+Full body shot, natural confident pose, looking at camera.
+Clean studio or lifestyle background, professional lighting.
+The product (${product}) must be clearly visible and the main focus.
+High quality, 4K resolution, fashion e-commerce photography.
+${options.customPrompt || ''}`.trim();
+  },
+
+  lifestyle: (product, options, _) => {
+    return `Lifestyle product photography of ${product} in a real-life context.
+Natural setting showing the product being used in daily life.
+Warm, inviting atmosphere, soft natural lighting.
+The product must be clearly visible and recognizable.
+High quality, 4K resolution, lifestyle photography.
+${options.customPrompt || ''}`.trim();
+  },
+
+  multi_angle: (product, options, _) => {
+    return `Professional product photography collage of ${product} from multiple angles.
+Create a 2x2 grid showing:
+- Top left: Front view
+- Top right: Side profile  
+- Bottom left: Back view
+- Bottom right: Detail close-up
+Clean white studio background for all shots.
+Consistent lighting across all angles.
+High quality, 4K resolution, e-commerce ready.
+${options.customPrompt || ''}`.trim();
+  },
+
+  remove_bg: (product, _, __) => {
+    return `Studio product photography of ${product} on a pure white background.
+Clean isolated product shot, no shadows, perfect for e-commerce.
+The product should be the only element visible.
+High quality, 4K resolution, transparent background ready.`.trim();
+  }
+};
+
+/**
+ * 이미지 고도화 함수 (C모드 핵심 기능)
+ * 상품 이미지를 입력받아 선택된 옵션에 따라 고도화된 이미지 생성
+ * 
+ * @param base64Image 원본 상품 이미지 (Base64)
+ * @param mimeType 이미지 MIME 타입
+ * @param options 고도화 옵션 (유형, 배경, 모델 설정 등)
+ * @param onProgress 진행 상태 콜백
+ * @returns 생성된 이미지 URL (Base64 data URL)
+ */
+export const enhanceProductImage = async (
+  base64Image: string,
+  mimeType: string,
+  options: ImageEnhancementOptions,
+  onProgress?: (step: string, message: string) => void
+): Promise<string> => {
+  try {
+    onProgress?.('analyzing', '상품 이미지를 분석하고 있습니다...');
+
+    // 1단계: 상품 분석 (간단한 설명 추출)
+    const productDescription = await analyzeProductForEnhancement(base64Image, mimeType);
+    onProgress?.('analyzed', `상품 분석 완료: ${productDescription.slice(0, 50)}...`);
+
+    // 2단계: 모델 설명 생성 (모델컷인 경우)
+    const modelDesc = options.type === 'model_shot'
+      ? buildModelDescription(options.modelSettings)
+      : '';
+
+    // 3단계: 프롬프트 생성
+    const promptBuilder = ENHANCEMENT_PROMPT_TEMPLATES[options.type];
+    const prompt = promptBuilder(productDescription, options, modelDesc);
+
+    console.log('[enhanceProductImage] Generated prompt:', prompt);
+    onProgress?.('generating', '고도화된 이미지를 생성하고 있습니다...');
+
+    // 4단계: 이미지 생성 (원본 이미지를 참조로 사용)
+    const enhancedImageUrl = await generateEnhancedImage(
+      prompt,
+      base64Image,
+      mimeType
+    );
+
+    onProgress?.('complete', '이미지 생성이 완료되었습니다!');
+
+    return enhancedImageUrl;
+  } catch (error) {
+    console.error('[enhanceProductImage] Error:', error);
+    throw error;
+  }
+};
+
+/**
+ * 이미지 고도화를 위한 상품 분석 (간소화 버전)
+ * 상품의 시각적 특징만 빠르게 추출
+ */
+const analyzeProductForEnhancement = async (
+  base64Image: string,
+  mimeType: string
+): Promise<string> => {
+  try {
+    const analysisPrompt = `Analyze this product image and provide a brief, detailed visual description in English.
+Focus on:
+- Product type (e.g., dress, jacket, bag, shoes)
+- Material/texture (e.g., cotton, leather, knit)
+- Color(s) (be specific, e.g., "soft pink" not just "pink")
+- Key design elements (e.g., embroidery, buttons, patterns)
+
+Return ONLY the description in 1-2 sentences, no explanation.
+Example: "A soft pink fluffy fleece baby outfit set with bear face embroidery, ribbed cuffs and waistband"`;
+
+    const gasUrl = getGasUrl(true);
+
+    if (gasUrl && gasUrl.trim() !== '') {
+      const result = await callGeminiViaProxy({
+        model: MODEL_TEXT_VISION,
+        contents: {
+          parts: [
+            { inlineData: { mimeType, data: base64Image } } as GeminiInlineDataPart,
+            { text: analysisPrompt } as GeminiTextPart
+          ]
+        },
+        config: {
+          temperature: 0.2,
+        }
+      });
+
+      const text = result.candidates?.[0]?.content?.parts?.[0]?.text;
+      return text?.trim() || 'the product';
+    }
+
+    // Fallback
+    return 'the product in the reference image';
+  } catch (error) {
+    console.warn('[analyzeProductForEnhancement] Analysis failed, using fallback:', error);
+    return 'the product in the reference image';
+  }
+};
+
+/**
+ * 고도화된 이미지 생성 (원본 참조 포함)
+ */
+const generateEnhancedImage = async (
+  prompt: string,
+  referenceBase64: string,
+  referenceMimeType: string
+): Promise<string> => {
+  const fullPrompt = `${PRODUCT_CONSISTENCY_PROMPT}
+
+${prompt}
+
+CRITICAL: The product in the generated image must be IDENTICAL to the reference image.
+Maintain all visual details: shape, color, texture, design elements, logos, stitching.`;
+
+  const parts: GeminiPart[] = [
+    { text: fullPrompt } as GeminiTextPart,
+    { inlineData: { mimeType: referenceMimeType, data: referenceBase64 } } as GeminiInlineDataPart
+  ];
+
+  const gasUrl = getGasUrl(true);
+
+  if (gasUrl && gasUrl.trim() !== '') {
+    const imageGenSafetySettings: GeminiSafetySettings[] = [
+      { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_NONE" },
+      { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_NONE" },
+      { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_NONE" },
+      { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_NONE" }
+    ];
+
+    const result = await callGeminiViaProxy({
+      model: MODEL_IMAGE_GEN,
+      contents: { parts },
+      config: {
+        temperature: 0.4,
+        topK: 32
+      },
+      safetySettings: imageGenSafetySettings
+    });
+
+    for (const part of result.candidates?.[0]?.content?.parts || []) {
+      if (part.inlineData) {
+        return `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`;
+      }
+    }
+
+    throw new Error("No image generated from enhancement");
+  }
+
+  throw new Error("GAS 프록시가 설정되지 않았습니다.");
+};
