@@ -140,103 +140,176 @@ export const deleteTemplate = (id: string) => {
  * 모델컷 공통 스타일 프롬프트 (얼굴 완전 익명 + 실제 인간 모델 필수)
  * ★ Gemini 권장사항 적용: 시맨틱 네거티브 대신 긍정적 표현 사용
  */
-const ANONYMOUS_MODEL_STYLE = 'A REAL HUMAN MODEL with visible natural skin texture and realistic body proportions is wearing this garment. The model has a natural human posture with arms and torso clearly visible. Face is cropped at NOSE level showing FULL NECKLINE, COLLAR, visible chin, lips, and jawline. This is a fashion editorial photo featuring a living person, like a magazine lookbook shoot';
+
+const PHOTOREALISM_KEYWORDS = 'hyperrealistic, ultra photorealistic, shot on Canon EOS R5 with 85mm f/1.4 lens, natural lighting, RAW photo quality, realistic skin texture with visible pores, authentic fabric texture with natural wrinkles, real photograph NOT AI-generated NOT CGI NOT illustration';
 
 /**
  * 네거티브 프롬프트 -> 긍정적 설명으로 변경
  * ★ "마네킹이 아니다" 대신 "이것은 실제 인간이 착용한 패션 사진이다" 형태로 강조
  */
-const NEGATIVE_ELEMENTS = 'This must be a photo of a REAL PERSON wearing the garment with visible human skin, natural body movement, and realistic fabric draping. The entire product must be fully visible without any cropping. Show the complete garment from neckline to hem';
+const NEGATIVE_ELEMENTS = 'STRICTLY ONE PERSON ONLY in the image — absolutely NO two people, NO side-by-side comparison, NO split image, NO collage. This must be a photo of a REAL PERSON wearing the garment with visible human skin, natural body movement, and realistic fabric draping. The entire product must be fully visible without any cropping. Show the complete garment from neckline to hem';
 
 /**
- * 패션 룩북 템플릿 - 컬러별 3장씩 모델컷 (정면전신, 상반신포즈, 상반신뒷모습)
+ * 다양한 배경 프리셋 - 단조로움 방지
+ */
+const LIFESTYLE_BACKGROUNDS = {
+  indoor1: 'cozy living room with a brown leather sofa and warm ambient lighting, vintage interior decor',
+  indoor2: 'elegant piano room with a classic upright piano, framed artwork on walls, warm window light',
+  indoor3: 'minimalist cafe interior with wooden tables, espresso cups, soft morning light through windows',
+  indoor4: 'bright modern apartment with bookshelves, green plants, natural sunlight streaming in',
+  outdoor1: 'charming european cobblestone street with cafe awnings, golden hour warm sunlight',
+  outdoor2: 'lush green garden path with blooming flowers, soft dappled sunlight filtering through trees',
+};
+
+/**
+ * 다양한 포즈 프리셋
+ */
+const DIVERSE_POSES = {
+  standing_casual: 'relaxed standing pose, one hand touching hair, weight on one leg, natural and effortless',
+  walking: 'mid-stride walking pose, natural arm swing, looking slightly to the side, dynamic movement',
+  sitting: 'sitting on a chair or bench, legs crossed elegantly, one hand resting on knee, relaxed confidence',
+  leaning: 'leaning against a wall or doorframe, arms casually crossed, cool and effortless vibe',
+  looking_away: 'turned 3/4 away from camera, looking off into the distance, artistic and candid feel',
+  holding_bag: 'holding a stylish handbag or crossbody bag, casual walk pose, lifestyle fashion shot',
+};
+
+/**
+ * 패션 룩북 템플릿 v2 — 7섹션 구조
+ * 히어로 → 제품설명 → 색상(2열) → 코디1(컬러별 3장) → 코디설명 → 코디2(3장) → 제품정보
  */
 export const FASHION_LOOKBOOK_TEMPLATE: Template = {
   id: 'tpl-fashion-lookbook-preset',
-  name: '패션 룩북 (얼굴 익명)',
-  description: '모델컷 중심의 의류 상세페이지. 컬러옵션별 3장씩 모델컷 (총 9장). 얼굴이 완전히 보이지 않는 익명 스타일.',
+  name: '패션아이템 상세(얼굴익명)',
+  description: '7섹션 구성: 히어로 → 제품설명 → 색상(2열) → 코디1(컬러별 3장) → 코디설명 → 코디2(3장) → 제품정보. 다양한 배경/앵글/포즈.',
   category: 'fashion',
   isBuiltin: true,
   createdAt: 1703836800000,
   sections: [
-    // 섹션 1: 메인 비주얼
+    // ═══════════════════════════════════════════
+    // 섹션 1: 히어로 이미지 (상품명 레터링 오버레이)
+    // ═══════════════════════════════════════════
     {
-      id: 'sec-lookbook-1',
-      title: '메인 비주얼',
-      content: '상품의 분위기와 감성을 전달하는 대표 이미지입니다.',
+      id: 'sec-lookbook-hero',
+      title: '히어로 이미지',
+      content: '상품의 대표 이미지입니다. 상품명과 간단한 카피가 레터링됩니다.',
       sectionType: 'hero' as SectionType,
       layoutType: 'full-width' as LayoutType,
-      imagePrompt: `REAL HUMAN MODEL wearing the product, fashion lookbook hero shot, upper body shot from CHIN down showing full neckline, ${ANONYMOUS_MODEL_STYLE}, soft natural lighting, clean white studio background, high-end fashion magazine aesthetic, elegant pose, ${NEGATIVE_ELEMENTS}, MUST maintain exact product design from reference, Aspect Ratio 3:4, Vertical Portrait Mode`
+      imagePrompt: `REAL HUMAN MODEL wearing the product, fashion editorial HERO shot, 3/4 BODY shot from chin down showing full neckline and product silhouette, {{MODEL_SETTINGS}}, ${LIFESTYLE_BACKGROUNDS.indoor3}, warm cinematic golden lighting, high-end fashion magazine cover quality with elegant minimal typography overlay space at top for product name, dreamy soft bokeh background, ${PHOTOREALISM_KEYWORDS}, ${NEGATIVE_ELEMENTS}, MUST maintain exact product design from reference, Aspect Ratio 3:4, Vertical Portrait Mode`
     },
-    // 섹션 2: 인트로 (text-only)
+
+    // ═══════════════════════════════════════════
+    // 섹션 2: 제품 설명 (텍스트 + 디자인 요소)
+    // ═══════════════════════════════════════════
     {
-      id: 'sec-lookbook-2',
-      title: '인트로',
-      content: '상품의 무드, 컨셉, 주요 셀링 포인트를 간결한 문구로 설명합니다.\\n\\n예: "클래식한 트위드 소재와 모던한 실루엣의 조화. 격식 있는 자리부터 데일리 룩까지 다양하게 연출 가능합니다."',
+      id: 'sec-lookbook-desc',
+      title: '제품 설명',
+      content: '상품의 무드, 컨셉, 주요 셀링 포인트를 설명합니다.\\n\\n이 상품의 매력 포인트와 추천 스타일링을 간결하게 전달합니다.',
       sectionType: 'description' as SectionType,
       layoutType: 'text-only' as LayoutType,
       imagePrompt: ''
     },
-    // 섹션 3: 컬러1 스타일링 (세로 3장)
+
+    // ═══════════════════════════════════════════
+    // 섹션 3: 색상 섹션 (가로 2열 그리드, 상품 중심 컷)
+    // ═══════════════════════════════════════════
     {
-      id: 'sec-lookbook-3',
-      title: '{{COLOR_1}} 스타일링',
-      content: '첫 번째 컬러옵션의 다양한 착장 모습입니다.',
-      sectionType: 'styling' as SectionType,
-      layoutType: 'grid-1' as LayoutType,
-      imagePrompt: `All 3 images MUST show {{COLOR_1}} colored product with IDENTICAL design`,
-      imageSlots: [
-        { id: 'slot-3-1', slotType: 'color_styling', prompt: `REAL HUMAN MODEL wearing {{COLOR_1}} colored product, FRONT FULL BODY shot, ${ANONYMOUS_MODEL_STYLE}, natural standing pose with visible arms and legs, clean white studio background, high-end fashion editorial, ${NEGATIVE_ELEMENTS}, CRITICAL: maintain exact product design from reference, Aspect Ratio 3:4, Vertical Portrait Mode`, photographyStyle: 'full-body' },
-        { id: 'slot-3-2', slotType: 'color_styling', prompt: `REAL HUMAN MODEL wearing {{COLOR_1}} colored product, UPPER BODY shot from CHIN down showing full neck, ${ANONYMOUS_MODEL_STYLE}, dynamic pose with crossed arms or touching collar, visible human hands and skin, soft studio lighting, ${NEGATIVE_ELEMENTS}, CRITICAL: maintain exact product design from reference, Aspect Ratio 3:4, Vertical Portrait Mode`, photographyStyle: 'close-up' },
-        { id: 'slot-3-3', slotType: 'color_styling', prompt: `REAL HUMAN MODEL wearing {{COLOR_1}} colored product, EITHER Back View OR Side Profile based on reference context: IF reference shows back design -> Generate BACK VIEW. IF reference only shows front -> Generate SIDE PROFILE or 45-degree angle shot showing styling variety. ${ANONYMOUS_MODEL_STYLE}, visible human body silhouette, studio lighting, ${NEGATIVE_ELEMENTS}, CRITICAL: maintain exact product design from reference, Aspect Ratio 3:4, Vertical Portrait Mode`, photographyStyle: 'close-up' }
-      ]
-    },
-    // 섹션 4: 컬러2 스타일링 (세로 3장)
-    {
-      id: 'sec-lookbook-4',
-      title: '{{COLOR_2}} 스타일링',
-      content: '두 번째 컬러옵션의 다양한 착장 모습입니다.',
-      sectionType: 'styling' as SectionType,
-      layoutType: 'grid-1' as LayoutType,
-      imagePrompt: `All 3 images MUST show {{COLOR_2}} colored product with IDENTICAL design`,
-      imageSlots: [
-        { id: 'slot-4-1', slotType: 'color_styling', prompt: `REAL HUMAN MODEL wearing {{COLOR_2}} colored product, FRONT FULL BODY shot, ${ANONYMOUS_MODEL_STYLE}, relaxed pose with one hand in pocket, clean white studio background, high-end fashion editorial, ${NEGATIVE_ELEMENTS}, CRITICAL: maintain exact product design from reference, Aspect Ratio 3:4, Vertical Portrait Mode`, photographyStyle: 'full-body' },
-        { id: 'slot-4-2', slotType: 'color_styling', prompt: `REAL HUMAN MODEL wearing {{COLOR_2}} colored product, UPPER BODY shot from CHIN down showing full neck, ${ANONYMOUS_MODEL_STYLE}, casual pose with hands together, visible human hands and skin, soft studio lighting, ${NEGATIVE_ELEMENTS}, CRITICAL: maintain exact product design from reference, Aspect Ratio 3:4, Vertical Portrait Mode`, photographyStyle: 'close-up' },
-        { id: 'slot-4-3', slotType: 'color_styling', prompt: `REAL HUMAN MODEL wearing {{COLOR_2}} colored product, EITHER Back View OR Side Profile based on reference context: IF reference shows back design -> Generate BACK VIEW. IF reference only shows front -> Generate SIDE PROFILE or 45-degree angle shot showing styling variety. ${ANONYMOUS_MODEL_STYLE}, visible human body silhouette, studio lighting, ${NEGATIVE_ELEMENTS}, CRITICAL: maintain exact product design from reference, Aspect Ratio 3:4, Vertical Portrait Mode`, photographyStyle: 'close-up' }
-      ]
-    },
-    // 섹션 5: 컬러3 스타일링 (세로 3장)
-    {
-      id: 'sec-lookbook-5',
-      title: '{{COLOR_3}} 스타일링',
-      content: '세 번째 컬러옵션의 다양한 착장 모습입니다.',
-      sectionType: 'styling' as SectionType,
-      layoutType: 'grid-1' as LayoutType,
-      imagePrompt: `All 3 images MUST show {{COLOR_3}} colored product with IDENTICAL design`,
-      imageSlots: [
-        { id: 'slot-5-1', slotType: 'color_styling', prompt: `REAL HUMAN MODEL wearing {{COLOR_3}} colored product, FRONT FULL BODY shot, ${ANONYMOUS_MODEL_STYLE}, confident standing pose with casual lean, clean white studio background, high-end fashion editorial, ${NEGATIVE_ELEMENTS}, CRITICAL: maintain exact product design from reference, Aspect Ratio 3:4, Vertical Portrait Mode`, photographyStyle: 'full-body' },
-        { id: 'slot-5-2', slotType: 'color_styling', prompt: `REAL HUMAN MODEL wearing {{COLOR_3}} colored product, UPPER BODY shot from CHIN down showing full neck, ${ANONYMOUS_MODEL_STYLE}, natural pose adjusting sleeve, visible human hands and arms, soft studio lighting, ${NEGATIVE_ELEMENTS}, CRITICAL: maintain exact product design from reference, Aspect Ratio 3:4, Vertical Portrait Mode`, photographyStyle: 'close-up' },
-        { id: 'slot-5-3', slotType: 'color_styling', prompt: `REAL HUMAN MODEL wearing {{COLOR_3}} colored product, EITHER Back View OR Side Profile based on reference context: IF reference shows back design -> Generate BACK VIEW. IF reference only shows front -> Generate SIDE PROFILE or 45-degree angle shot showing styling variety. ${ANONYMOUS_MODEL_STYLE}, visible human body silhouette, studio lighting, ${NEGATIVE_ELEMENTS}, CRITICAL: maintain exact product design from reference, Aspect Ratio 3:4, Vertical Portrait Mode`, photographyStyle: 'close-up' }
-      ]
-    },
-    // 섹션 6: 디테일 클로즈업
-    {
-      id: 'sec-lookbook-6',
-      title: '디테일 클로즈업',
-      content: '원단의 질감, 단추, 마감 등 디테일을 확대하여 보여줍니다.',
-      sectionType: 'material_detail' as SectionType,
+      id: 'sec-lookbook-colors',
+      title: '색상 안내',
+      content: '상품의 컬러 옵션을 한눈에 보여줍니다. 각 색상별 상품 중심 이미지입니다.',
+      sectionType: 'colors' as SectionType,
       layoutType: 'grid-2' as LayoutType,
-      imagePrompt: 'Product detail close-up shots, showing fabric texture, buttons, stitching',
+      imagePrompt: 'Product-centered upper body shots showing each color option clearly. EACH IMAGE = EXACTLY 1 PERSON wearing 1 COLOR.',
       imageSlots: [
-        { id: 'slot-6-1', slotType: 'detail', prompt: 'Extreme close-up of fabric texture, showing weave pattern and material quality, soft focus background, studio macro photography', photographyStyle: 'close-up' },
-        { id: 'slot-6-2', slotType: 'detail', prompt: 'Close-up of button details and collar/neckline finishing, showing craftsmanship and quality stitching, studio lighting', photographyStyle: 'close-up' }
+        { id: 'slot-color-1', slotType: 'color_styling', prompt: `⚠️ SINGLE MODEL ONLY — ONE person wearing EXACTLY {{COLOR_1}} colored version of the product. UPPER BODY PRODUCT-CENTERED shot from chin down, {{MODEL_SETTINGS}}, one hand gently touching the garment, clean simple light-colored background, soft diffused studio light, product color and texture are the MAIN FOCUS, product fills 70% of frame, ${PHOTOREALISM_KEYWORDS}, ${NEGATIVE_ELEMENTS}, CRITICAL: the garment color MUST be {{COLOR_1}} as registered by user — do NOT change the color, Aspect Ratio 3:4`, photographyStyle: 'close-up' },
+        { id: 'slot-color-2', slotType: 'color_styling', prompt: `⚠️ SINGLE MODEL ONLY — ONE person wearing EXACTLY {{COLOR_2}} colored version of the product. UPPER BODY PRODUCT-CENTERED shot from chin down, {{MODEL_SETTINGS}}, one hand on hip casual pose, clean simple light-colored background, soft diffused studio light, product color and texture are the MAIN FOCUS, product fills 70% of frame, ${PHOTOREALISM_KEYWORDS}, ${NEGATIVE_ELEMENTS}, CRITICAL: the garment color MUST be {{COLOR_2}} as registered by user — do NOT change the color, Aspect Ratio 3:4`, photographyStyle: 'close-up' },
+        { id: 'slot-color-3', slotType: 'color_styling', prompt: `⚠️ SINGLE MODEL ONLY — ONE person wearing EXACTLY {{COLOR_3}} colored version of the product. UPPER BODY PRODUCT-CENTERED shot from chin down, {{MODEL_SETTINGS}}, touching collar gently, clean simple light-colored background, warm ambient lighting, product color and design details are the MAIN FOCUS, product fills 70% of frame, ${PHOTOREALISM_KEYWORDS}, ${NEGATIVE_ELEMENTS}, CRITICAL: the garment color MUST be {{COLOR_3}} as registered by user — do NOT change the color, Aspect Ratio 3:4`, photographyStyle: 'close-up' },
+        { id: 'slot-color-4', slotType: 'color_styling', prompt: `⚠️ SINGLE MODEL ONLY — ONE person wearing EXACTLY {{COLOR_4}} colored version of the product. UPPER BODY PRODUCT-CENTERED shot from chin down, {{MODEL_SETTINGS}}, ${DIVERSE_POSES.standing_casual}, clean simple light-colored background, soft cafe lighting, product color and silhouette are the MAIN FOCUS, product fills 70% of frame, ${PHOTOREALISM_KEYWORDS}, ${NEGATIVE_ELEMENTS}, CRITICAL: the garment color MUST be {{COLOR_4}} as registered by user — do NOT change the color, Aspect Ratio 3:4`, photographyStyle: 'close-up' }
       ]
     },
-    // 섹션 7: 제품 정보 (text-only)
+
+    // ═══════════════════════════════════════════
+    // 섹션 4: 코디 섹션 1 — 컬러1 (세로 3장, 다양한 앵글/배경)
+    // ═══════════════════════════════════════════
     {
-      id: 'sec-lookbook-7',
+      id: 'sec-lookbook-styling1-c1',
+      title: '{{COLOR_1}} 코디',
+      content: '첫 번째 컬러의 다양한 코디네이션과 디테일입니다.',
+      sectionType: 'styling' as SectionType,
+      layoutType: 'grid-1' as LayoutType,
+      imagePrompt: `All 3 images MUST show {{COLOR_1}} colored product with IDENTICAL design, VARIED backgrounds and camera angles`,
+      imageSlots: [
+        { id: 'slot-s1c1-1', slotType: 'color_styling', prompt: `REAL HUMAN MODEL wearing {{COLOR_1}} colored product, WAIST-UP PRODUCT-FOCUSED shot from chin down to hip, {{MODEL_SETTINGS}}, standing straight with one hand lightly touching the garment, COMMERCIAL E-COMMERCE optimized: product fills 70% of frame, clean softly blurred background, shallow depth of field, professional studio-quality directional lighting highlighting garment texture and fit, product details clearly visible, ${PHOTOREALISM_KEYWORDS}, ${NEGATIVE_ELEMENTS}, CRITICAL: maintain exact product design from reference, Aspect Ratio 3:4, Vertical Portrait Mode`, photographyStyle: 'close-up' },
+        { id: 'slot-s1c1-2', slotType: 'color_styling', prompt: `REAL HUMAN MODEL wearing {{COLOR_1}} colored product, UPPER BODY CLOSE-UP shot from neckline to waist, {{MODEL_SETTINGS}}, one hand gently adjusting collar or sleeve, COMMERCIAL E-COMMERCE optimized: product fills 75% of frame, tight crop on garment, clean minimal light-toned background with soft bokeh, warm studio lighting emphasizing fabric texture and stitching details, ${PHOTOREALISM_KEYWORDS}, ${NEGATIVE_ELEMENTS}, CRITICAL: maintain exact product design from reference, Aspect Ratio 3:4, Vertical Portrait Mode`, photographyStyle: 'close-up' },
+        { id: 'slot-s1c1-3', slotType: 'color_styling', prompt: `REAL HUMAN MODEL wearing {{COLOR_1}} colored product, EITHER Back View OR Side Profile based on reference context: IF reference shows back design -> Generate BACK VIEW showing full garment back design clearly, product fills 70% of frame. IF reference only shows front -> Generate PRODUCT-FOCUSED WAIST-UP shot, 3/4 angle view, relaxed pose, clean blurred background. {{MODEL_SETTINGS}}, COMMERCIAL E-COMMERCE optimized: tight crop, minimal background, product is the hero, ${PHOTOREALISM_KEYWORDS}, ${NEGATIVE_ELEMENTS}, CRITICAL: maintain exact product design from reference, Aspect Ratio 3:4, Vertical Portrait Mode`, photographyStyle: 'close-up' }
+      ]
+    },
+
+    // 섹션 4-2: 코디 섹션 1 — 컬러2 (세로 3장)
+    {
+      id: 'sec-lookbook-styling1-c2',
+      title: '{{COLOR_2}} 코디',
+      content: '두 번째 컬러의 다양한 코디네이션과 디테일입니다.',
+      sectionType: 'styling' as SectionType,
+      layoutType: 'grid-1' as LayoutType,
+      imagePrompt: `All 3 images MUST show {{COLOR_2}} colored product with IDENTICAL design, VARIED backgrounds and camera angles`,
+      imageSlots: [
+        { id: 'slot-s1c2-1', slotType: 'color_styling', prompt: `REAL HUMAN MODEL wearing {{COLOR_2}} colored product, WAIST-UP PRODUCT-FOCUSED shot from chin down to hip, 3/4 angle, {{MODEL_SETTINGS}}, relaxed standing pose with weight on one leg, COMMERCIAL E-COMMERCE optimized: product fills 70% of frame, clean softly blurred background, bright natural light from window, product color and silhouette are the MAIN FOCUS, ${PHOTOREALISM_KEYWORDS}, ${NEGATIVE_ELEMENTS}, CRITICAL: maintain exact product design from reference, Aspect Ratio 3:4, Vertical Portrait Mode`, photographyStyle: 'close-up' },
+        { id: 'slot-s1c2-2', slotType: 'color_styling', prompt: `REAL HUMAN MODEL wearing {{COLOR_2}} colored product, UPPER BODY CLOSE-UP shot from neckline to waist, {{MODEL_SETTINGS}}, looking slightly to the side with natural pose, COMMERCIAL E-COMMERCE optimized: product fills 75% of frame, soft dreamy bokeh background, warm directional lighting emphasizing product color and fabric texture, ${PHOTOREALISM_KEYWORDS}, ${NEGATIVE_ELEMENTS}, CRITICAL: maintain exact product design from reference, Aspect Ratio 3:4, Vertical Portrait Mode`, photographyStyle: 'close-up' },
+        { id: 'slot-s1c2-3', slotType: 'color_styling', prompt: `REAL HUMAN MODEL wearing {{COLOR_2}} colored product, EITHER Back View OR Side Profile based on reference context: IF reference shows back design -> Generate BACK VIEW showing full garment back design, product fills 70% of frame. IF reference only shows front -> Generate PRODUCT-FOCUSED WAIST-UP shot, side angle, natural pose, clean blurred background. {{MODEL_SETTINGS}}, COMMERCIAL E-COMMERCE optimized: tight crop, minimal background, warm lighting, ${PHOTOREALISM_KEYWORDS}, ${NEGATIVE_ELEMENTS}, CRITICAL: maintain exact product design from reference, Aspect Ratio 3:4, Vertical Portrait Mode`, photographyStyle: 'close-up' }
+      ]
+    },
+
+    // 섹션 4-3: 코디 섹션 1 — 컬러3 (세로 3장)
+    {
+      id: 'sec-lookbook-styling1-c3',
+      title: '{{COLOR_3}} 코디',
+      content: '세 번째 컬러의 다양한 코디네이션과 디테일입니다.',
+      sectionType: 'styling' as SectionType,
+      layoutType: 'grid-1' as LayoutType,
+      imagePrompt: `All 3 images MUST show {{COLOR_3}} colored product with IDENTICAL design, VARIED backgrounds and camera angles`,
+      imageSlots: [
+        { id: 'slot-s1c3-1', slotType: 'color_styling', prompt: `REAL HUMAN MODEL wearing {{COLOR_3}} colored product, WAIST-UP PRODUCT-FOCUSED shot from chin down to hip, {{MODEL_SETTINGS}}, relaxed confident standing pose, COMMERCIAL E-COMMERCE optimized: product fills 70% of frame, clean softly blurred warm-toned background, professional lighting highlighting garment texture and color, ${PHOTOREALISM_KEYWORDS}, ${NEGATIVE_ELEMENTS}, CRITICAL: maintain exact product design from reference, Aspect Ratio 3:4, Vertical Portrait Mode`, photographyStyle: 'close-up' },
+        { id: 'slot-s1c3-2', slotType: 'color_styling', prompt: `REAL HUMAN MODEL wearing {{COLOR_3}} colored product, UPPER BODY CLOSE-UP from neckline to waist, {{MODEL_SETTINGS}}, hands gently adjusting sleeve or collar, COMMERCIAL E-COMMERCE optimized: product fills 75% of frame, tight crop on garment, clean minimal background, soft morning light, macro-level fabric texture visible, ${PHOTOREALISM_KEYWORDS}, ${NEGATIVE_ELEMENTS}, CRITICAL: maintain exact product design from reference, Aspect Ratio 3:4, Vertical Portrait Mode`, photographyStyle: 'close-up' },
+        { id: 'slot-s1c3-3', slotType: 'color_styling', prompt: `REAL HUMAN MODEL wearing {{COLOR_3}} colored product, EITHER Back View OR Side Profile based on reference context: IF reference shows back design -> Generate BACK VIEW showing garment back clearly, product fills 70% of frame. IF reference only shows front -> Generate PRODUCT-FOCUSED WAIST-UP shot, artistic 3/4 angle, clean blurred background. {{MODEL_SETTINGS}}, COMMERCIAL E-COMMERCE optimized: tight crop, minimal background, creative composition, ${PHOTOREALISM_KEYWORDS}, ${NEGATIVE_ELEMENTS}, CRITICAL: maintain exact product design from reference, Aspect Ratio 3:4, Vertical Portrait Mode`, photographyStyle: 'close-up' }
+      ]
+    },
+
+    // ═══════════════════════════════════════════
+    // 섹션 5: 코디 설명 (텍스트)
+    // ═══════════════════════════════════════════
+    {
+      id: 'sec-lookbook-styling-desc',
+      title: '스타일링 가이드',
+      content: '다양한 코디네이션 팁과 스타일링 포인트를 안내합니다.\\n\\n이 상품과 잘 어울리는 하의, 가방, 슈즈 등 추천 조합을 알려드립니다.',
+      sectionType: 'description' as SectionType,
+      layoutType: 'text-only' as LayoutType,
+      imagePrompt: ''
+    },
+
+    // ═══════════════════════════════════════════
+    // 섹션 6: 코디 섹션 2 — 라이프스타일 코디 (세로 3장)
+    // ═══════════════════════════════════════════
+    {
+      id: 'sec-lookbook-styling2',
+      title: '라이프스타일 코디',
+      content: '상품과 어울리는 다양한 코디네이션을 라이프스타일 컨셉으로 보여줍니다.',
+      sectionType: 'styling' as SectionType,
+      layoutType: 'grid-1' as LayoutType,
+      imagePrompt: 'Lifestyle coordination shots with diverse backgrounds and poses, showing versatile styling',
+      imageSlots: [
+        { id: 'slot-style2-1', slotType: 'color_styling', prompt: `REAL HUMAN MODEL wearing the product, WAIST-UP to HIP PRODUCT-FOCUSED shot, {{MODEL_SETTINGS}}, stylishly coordinated with complementary bottom (skirt or pants) and a handbag, COMMERCIAL E-COMMERCE optimized: product fills 65% of frame, softly blurred outdoor background with warm golden hour light, product styling and coordination are the MAIN FOCUS, fashion editorial quality, ${PHOTOREALISM_KEYWORDS}, ${NEGATIVE_ELEMENTS}, CRITICAL: maintain exact product design from reference, Aspect Ratio 3:4, Vertical Portrait Mode`, photographyStyle: 'close-up' },
+        { id: 'slot-style2-2', slotType: 'color_styling', prompt: `REAL HUMAN MODEL wearing the product, UPPER BODY CLOSE-UP from neckline to waist, {{MODEL_SETTINGS}}, natural relaxed pose, coordinated with stylish accessories (necklace, watch), COMMERCIAL E-COMMERCE optimized: product fills 70% of frame, soft warm blurred interior background, product and coordination outfit clearly visible, warm ambient lighting on garment, ${PHOTOREALISM_KEYWORDS}, ${NEGATIVE_ELEMENTS}, CRITICAL: maintain exact product design from reference, Aspect Ratio 3:4, Vertical Portrait Mode`, photographyStyle: 'close-up' },
+        { id: 'slot-style2-3', slotType: 'color_styling', prompt: `REAL HUMAN MODEL wearing the product, WAIST-UP 3/4 ANGLE shot, {{MODEL_SETTINGS}}, coordinated with trendy accessories (bracelet, earrings, scarf), COMMERCIAL E-COMMERCE optimized: product fills 65% of frame, softly blurred background with natural light creating beautiful shadows, product texture and coordination styling clearly visible, artistic editorial composition, ${PHOTOREALISM_KEYWORDS}, ${NEGATIVE_ELEMENTS}, CRITICAL: maintain exact product design from reference, Aspect Ratio 3:4, Vertical Portrait Mode`, photographyStyle: 'close-up' }
+      ]
+    },
+
+    // ═══════════════════════════════════════════
+    // 섹션 7: 제품 정보 (text + 사용자 이미지)
+    // ═══════════════════════════════════════════
+    {
+      id: 'sec-lookbook-info',
       title: '제품 정보',
-      content: '사이즈 가이드와 소재 정보를 텍스트로 안내합니다.\\n\\n**소재**: 폴리에스터 70%, 아크릴 20%, 울 10%\\n**두께감**: 중간 / **비침**: 없음 / **신축성**: 약간 있음\\n\\n**사이즈 (cm)**\\n| 사이즈 | 어깨 | 가슴 | 소매 | 총장 |\\n|--------|------|------|------|------|\\n| S | 38 | 94 | 58 | 52 |\\n| M | 40 | 98 | 59 | 54 |\\n| L | 42 | 102 | 60 | 56 |',
+      content: '소재, 사이즈 가이드, 세탁 안내 등 상세 제품 정보입니다.\\n\\n**소재**: 폴리에스터 70%, 아크릴 20%, 울 10%\\n**두께감**: 중간 / **비침**: 없음 / **신축성**: 약간 있음\\n\\n**사이즈 (cm)**\\n| 사이즈 | 어깨 | 가슴 | 소매 | 총장 |\\n|--------|------|------|------|------|\\n| S | 38 | 94 | 58 | 52 |\\n| M | 40 | 98 | 59 | 54 |\\n| L | 42 | 102 | 60 | 56 |',
       sectionType: 'spec' as SectionType,
       layoutType: 'text-only' as LayoutType,
       imagePrompt: ''
@@ -336,11 +409,120 @@ export const OUTDOOR_CLOTHING_TEMPLATE: Template = {
 };
 
 /**
+ * 거울 셀카(Mirror Selfie) 스타일 프롬프트
+ * - 핸드폰으로 찍는 거울 셀카 스타일
+ * - 얼굴은 핸드폰에 가려 보이지 않음
+ * - 어깨~발끝 핏과 실루엣에 집중
+ */
+
+/**
+ * 거울 셀카 네거티브 강조 (긍정적 표현)
+ */
+const MIRROR_SELFIE_ELEMENTS = 'This must be a realistic mirror selfie photo of a REAL PERSON taking a self-portrait in a mirror with a smartphone. The model has visible human skin, natural body proportions, and the garment must be fully visible from neckline to hem with natural fabric draping. The phone naturally obscures the face';
+
+/**
+ * 거울 셀카 룩북 템플릿 - 컬러별 3장씩 모델컷
+ */
+export const FASHION_MIRROR_SELFIE_TEMPLATE: Template = {
+  id: 'tpl-fashion-mirror-selfie-preset',
+  name: '거울 셀카 룩북',
+  description: '거울 셀카 컨셉의 의류 상세페이지. 핸드폰으로 찍는 캐주얼한 무드. 컬러옵션별 3장씩 (총 9장). 얼굴 미노출.',
+  category: 'fashion',
+  isBuiltin: true,
+  createdAt: 1740873600000, // 2025-03-02
+  sections: [
+    // 섹션 1: 메인 비주얼 (거울 셀카 전신)
+    {
+      id: 'sec-mirror-1',
+      title: '메인 비주얼',
+      content: '거울 앞에서 찍은 캐주얼한 셀카 컨셉의 대표 이미지입니다.',
+      sectionType: 'hero' as SectionType,
+      layoutType: 'full-width' as LayoutType,
+      imagePrompt: `REAL HUMAN MODEL taking a full-body mirror selfie with smartphone covering face, {{MODEL_SETTINGS}}, standing straight showing complete outfit from shoulders to shoes, warm natural lighting from a nearby window, cozy minimalist room, high quality smartphone camera look, ${MIRROR_SELFIE_ELEMENTS}, MUST maintain exact product design from reference, Aspect Ratio 3:4, Vertical Portrait Mode`
+    },
+    // 섹션 2: 인트로 (text-only)
+    {
+      id: 'sec-mirror-2',
+      title: '인트로',
+      content: '리얼한 핏을 보여드리는 거울 셀카 룩북.\\\\n\\\\n실제 착용 시 핏감과 실루엣을 가장 잘 보여주는 거울 셀카 컨셉으로 촬영했습니다.',
+      sectionType: 'description' as SectionType,
+      layoutType: 'text-only' as LayoutType,
+      imagePrompt: ''
+    },
+    // 섹션 3: 컬러1 스타일링 (세로 3장)
+    {
+      id: 'sec-mirror-3',
+      title: '{{COLOR_1}} 스타일링',
+      content: '첫 번째 컬러옵션의 다양한 착장 모습입니다.',
+      sectionType: 'styling' as SectionType,
+      layoutType: 'grid-1' as LayoutType,
+      imagePrompt: `All 3 images MUST show {{COLOR_1}} colored product with IDENTICAL design, mirror selfie style`,
+      imageSlots: [
+        { id: 'slot-m3-1', slotType: 'color_styling', prompt: `REAL HUMAN MODEL taking a FRONT mirror selfie with smartphone covering face, wearing {{COLOR_1}} colored product, full body visible in mirror from shoulders to toes, {{MODEL_SETTINGS}}, natural standing pose, emphasizing garment fit and silhouette, ${MIRROR_SELFIE_ELEMENTS}, CRITICAL: maintain exact product design from reference, Aspect Ratio 3:4, Vertical Portrait Mode`, photographyStyle: 'full-body' },
+        { id: 'slot-m3-2', slotType: 'color_styling', prompt: `REAL HUMAN MODEL taking a SIDE ANGLE mirror selfie with smartphone, wearing {{COLOR_1}} colored product, slight turn showing side profile of the outfit, visible from shoulders to toes in full-length mirror, {{MODEL_SETTINGS}}, one hand on hip casual pose, emphasizing garment drape and body line, ${MIRROR_SELFIE_ELEMENTS}, CRITICAL: maintain exact product design from reference, Aspect Ratio 3:4, Vertical Portrait Mode`, photographyStyle: 'full-body' },
+        { id: 'slot-m3-3', slotType: 'color_styling', prompt: `REAL HUMAN MODEL wearing {{COLOR_1}} colored product, EITHER Back View OR Side Profile based on reference context: IF reference shows back design -> Generate BACK VIEW mirror selfie showing the back of the garment clearly. IF reference only shows front -> Generate coordination full body shot with complementary accessories, casual lifestyle setting. {{MODEL_SETTINGS}}, ${MIRROR_SELFIE_ELEMENTS}, CRITICAL: maintain exact product design from reference, Aspect Ratio 3:4, Vertical Portrait Mode`, photographyStyle: 'full-body' }
+      ]
+    },
+    // 섹션 4: 컬러2 스타일링 (세로 3장)
+    {
+      id: 'sec-mirror-4',
+      title: '{{COLOR_2}} 스타일링',
+      content: '두 번째 컬러옵션의 다양한 착장 모습입니다.',
+      sectionType: 'styling' as SectionType,
+      layoutType: 'grid-1' as LayoutType,
+      imagePrompt: `All 3 images MUST show {{COLOR_2}} colored product with IDENTICAL design, mirror selfie style`,
+      imageSlots: [
+        { id: 'slot-m4-1', slotType: 'color_styling', prompt: `REAL HUMAN MODEL taking a FRONT mirror selfie with smartphone covering face, wearing {{COLOR_2}} colored product, full body visible in mirror from shoulders to toes, {{MODEL_SETTINGS}}, relaxed pose with weight on one leg, emphasizing garment fit and silhouette, ${MIRROR_SELFIE_ELEMENTS}, CRITICAL: maintain exact product design from reference, Aspect Ratio 3:4, Vertical Portrait Mode`, photographyStyle: 'full-body' },
+        { id: 'slot-m4-2', slotType: 'color_styling', prompt: `REAL HUMAN MODEL taking a SIDE ANGLE mirror selfie with smartphone, wearing {{COLOR_2}} colored product, turning to show side view of outfit, visible from shoulders to toes in mirror, {{MODEL_SETTINGS}}, hand touching hair casual pose, emphasizing garment silhouette from side, ${MIRROR_SELFIE_ELEMENTS}, CRITICAL: maintain exact product design from reference, Aspect Ratio 3:4, Vertical Portrait Mode`, photographyStyle: 'full-body' },
+        { id: 'slot-m4-3', slotType: 'color_styling', prompt: `REAL HUMAN MODEL wearing {{COLOR_2}} colored product, EITHER Back View OR Side Profile based on reference context: IF reference shows back design -> Generate BACK VIEW mirror selfie showing the back of the garment clearly. IF reference only shows front -> Generate coordination full body shot with complementary accessories, casual lifestyle setting. {{MODEL_SETTINGS}}, ${MIRROR_SELFIE_ELEMENTS}, CRITICAL: maintain exact product design from reference, Aspect Ratio 3:4, Vertical Portrait Mode`, photographyStyle: 'full-body' }
+      ]
+    },
+    // 섹션 5: 컬러3 스타일링 (세로 3장)
+    {
+      id: 'sec-mirror-5',
+      title: '{{COLOR_3}} 스타일링',
+      content: '세 번째 컬러옵션의 다양한 착장 모습입니다.',
+      sectionType: 'styling' as SectionType,
+      layoutType: 'grid-1' as LayoutType,
+      imagePrompt: `All 3 images MUST show {{COLOR_3}} colored product with IDENTICAL design, mirror selfie style`,
+      imageSlots: [
+        { id: 'slot-m5-1', slotType: 'color_styling', prompt: `REAL HUMAN MODEL taking a FRONT mirror selfie with smartphone covering face, wearing {{COLOR_3}} colored product, full body visible in mirror from shoulders to toes, {{MODEL_SETTINGS}}, confident standing pose, emphasizing garment fit and silhouette, ${MIRROR_SELFIE_ELEMENTS}, CRITICAL: maintain exact product design from reference, Aspect Ratio 3:4, Vertical Portrait Mode`, photographyStyle: 'full-body' },
+        { id: 'slot-m5-2', slotType: 'color_styling', prompt: `REAL HUMAN MODEL taking a SIDE ANGLE mirror selfie with smartphone, wearing {{COLOR_3}} colored product, angled view showing side profile of outfit, visible from shoulders to toes in mirror, {{MODEL_SETTINGS}}, casual crossed-arms pose, emphasizing garment drape and body line, ${MIRROR_SELFIE_ELEMENTS}, CRITICAL: maintain exact product design from reference, Aspect Ratio 3:4, Vertical Portrait Mode`, photographyStyle: 'full-body' },
+        { id: 'slot-m5-3', slotType: 'color_styling', prompt: `REAL HUMAN MODEL wearing {{COLOR_3}} colored product, EITHER Back View OR Side Profile based on reference context: IF reference shows back design -> Generate BACK VIEW mirror selfie showing the back of the garment clearly. IF reference only shows front -> Generate coordination full body shot with complementary accessories, casual lifestyle setting. {{MODEL_SETTINGS}}, ${MIRROR_SELFIE_ELEMENTS}, CRITICAL: maintain exact product design from reference, Aspect Ratio 3:4, Vertical Portrait Mode`, photographyStyle: 'full-body' }
+      ]
+    },
+    // 섹션 6: 디테일 클로즈업 (2장)
+    {
+      id: 'sec-mirror-6',
+      title: '디테일 클로즈업',
+      content: '원단의 질감, 단추, 마감 등 디테일을 확대하여 보여줍니다.',
+      sectionType: 'material_detail' as SectionType,
+      layoutType: 'grid-2' as LayoutType,
+      imagePrompt: 'Product detail close-up shots, showing fabric texture, buttons, stitching',
+      imageSlots: [
+        { id: 'slot-m6-1', slotType: 'detail', prompt: 'Extreme close-up of fabric texture and weave pattern, showing material quality and tactile feel, soft focus background, warm natural lighting, cozy indoor setting', photographyStyle: 'close-up' },
+        { id: 'slot-m6-2', slotType: 'detail', prompt: 'Close-up of finishing details: buttons, collar, neckline, cuffs or hem stitching, showing quality craftsmanship, warm indoor lighting', photographyStyle: 'close-up' }
+      ]
+    },
+    // 섹션 7: 제품 정보 (text-only)
+    {
+      id: 'sec-mirror-7',
+      title: '제품 정보',
+      content: '사이즈 가이드와 소재 정보를 텍스트로 안내합니다.\\\\n\\\\n**소재**: 폴리에스터 70%, 아크릴 20%, 울 10%\\\\n**두께감**: 중간 / **비침**: 없음 / **신축성**: 약간 있음\\\\n\\\\n**사이즈 (cm)**\\\\n| 사이즈 | 어깨 | 가슴 | 소매 | 총장 |\\\\n|--------|------|------|------|------|\\\\n| S | 38 | 94 | 58 | 52 |\\\\n| M | 40 | 98 | 59 | 54 |\\\\n| L | 42 | 102 | 60 | 56 |',
+      sectionType: 'spec' as SectionType,
+      layoutType: 'text-only' as LayoutType,
+      imagePrompt: ''
+    }
+  ]
+};
+
+/**
  * 빌트인 템플릿 ID 목록
  */
 const BUILT_IN_TEMPLATE_IDS = [
   'tpl-fashion-lookbook-preset',
-  'tpl-outdoor-clothing-preset'
+  'tpl-outdoor-clothing-preset',
+  'tpl-fashion-mirror-selfie-preset'
 ];
 
 /**
@@ -360,5 +542,11 @@ export const initializeBuiltInTemplates = () => {
   if (!existingIds.has(OUTDOOR_CLOTHING_TEMPLATE.id)) {
     saveTemplate(OUTDOOR_CLOTHING_TEMPLATE);
     console.log('[TemplateService] Built-in template added:', OUTDOOR_CLOTHING_TEMPLATE.name);
+  }
+
+  // 거울 셀카 룩북 템플릿이 없으면 추가
+  if (!existingIds.has(FASHION_MIRROR_SELFIE_TEMPLATE.id)) {
+    saveTemplate(FASHION_MIRROR_SELFIE_TEMPLATE);
+    console.log('[TemplateService] Built-in template added:', FASHION_MIRROR_SELFIE_TEMPLATE.name);
   }
 };

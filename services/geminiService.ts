@@ -427,12 +427,28 @@ const generateImageSlotsForLayout = (
     return existingSlots;
   }
 
-  // 기존 슬롯이 있으면 그대로 사용 (개수 맞으면)
-  if (existingSlots && existingSlots.length === requiredCount) {
-    return existingSlots;
+  // 기존 슬롯이 있으면 최대한 재사용
+  if (existingSlots && existingSlots.length > 0) {
+    if (existingSlots.length >= requiredCount) {
+      return existingSlots.slice(0, requiredCount);
+    }
+
+    // 개수가 부족한 경우, 있는 건 쓰고 나머지는 새로 생성
+    const slots = [...existingSlots];
+    for (let i = existingSlots.length; i < requiredCount; i++) {
+      const slotNum = i + 1;
+      slots.push({
+        id: `${sectionId}-slot-${slotNum}`,
+        slotType: i === 0 ? 'product' : 'detail',
+        prompt: requiredCount > 1
+          ? `[이미지 ${slotNum}/${requiredCount}] ${basePrompt}`
+          : basePrompt
+      });
+    }
+    return slots;
   }
 
-  // 새로 생성
+  // 새로 생성 (existingSlots가 아예 없는 경우)
   const slots: import('../types').ImageSlot[] = [];
   for (let i = 0; i < requiredCount; i++) {
     const slotNum = i + 1;
@@ -526,11 +542,11 @@ const buildModelDescription = (
 
   const parts: string[] = [];
 
-  // 인종/외모
+  // 인종/외모 — 구체적으로 강화
   if (modelSettings.ethnicity === 'asian') {
-    parts.push('Asian model');
+    parts.push('East Asian / Korean model with typical Korean facial features, fair skin tone, monolid or subtle double eyelid eyes');
   } else if (modelSettings.ethnicity === 'western') {
-    parts.push('Western/Caucasian model');
+    parts.push('Western/Caucasian model with European facial features');
   }
 
   // 성별
@@ -557,9 +573,160 @@ const buildModelDescription = (
     parts.push(`with ${modelSettings.hairStyle}`);
   }
 
+  // 분위기/무드
+  if (modelSettings.mood) {
+    const moodMap: Record<string, string> = {
+      'sexy': 'confident alluring pose, subtle sensual mood',
+      'elegant': 'refined graceful posture, sophisticated high-fashion mood',
+      'innocent': 'fresh youthful vibe, clean natural mood',
+      'casual': 'relaxed everyday style, comfortable natural mood',
+      'sporty': 'energetic active pose, dynamic athletic mood'
+    };
+    if (moodMap[modelSettings.mood]) {
+      parts.push(moodMap[modelSettings.mood]);
+    }
+  }
+
+  // 모델컷 스타일
+  if (modelSettings.modelCutStyle) {
+    const cutStyleMap: Record<string, string> = {
+      'face_visible': 'FULL FACE VISIBLE with clear facial features, natural expression, looking at or near camera',
+      'face_anonymous': 'Face CROPPED at NOSE level, showing chin, lips, jawline, and full neckline. NO eyes visible. Emphasis on garment and body silhouette',
+      'mirror_selfie': 'Casual SELFIE-STYLE photo angle as if taken by the model themselves. Camera at slightly elevated arm-length angle. Natural relaxed pose, one hand may be near hair or garment. Face CROPPED at nose level, NO eyes visible. Clean simple background with soft bokeh. NO mirror visible, NO phone visible, NO reflection. Commercial e-commerce quality with focus on outfit fit and styling'
+    };
+    if (cutStyleMap[modelSettings.modelCutStyle]) {
+      parts.push(cutStyleMap[modelSettings.modelCutStyle]);
+    }
+  }
+
   if (parts.length === 0) return '';
 
   return parts.join(', ');
+};
+
+/**
+ * ★ 동적 컬러 섹션 조정 전처리 함수
+ * - 사용자가 입력한 컬러 옵션 개수에 따라 템플릿의 섹션/슬롯을 동적으로 증감
+ * - templateService.ts 원본은 변경하지 않고, 런타임에서만 처리
+ * 
+ * @param sections 원본 템플릿 섹션 배열 (deep copy하여 사용)
+ * @param colorCount 사용자가 입력한 컬러 옵션 수
+ * @returns 조정된 섹션 배열
+ */
+const adjustTemplateSectionsForColors = (
+  sections: import('../types').SectionData[],
+  colorCount: number
+): import('../types').SectionData[] => {
+  if (colorCount <= 0) {
+    console.log('[adjustTemplateSectionsForColors] 컬러 옵션 없음, 원본 유지');
+    return sections;
+  }
+
+  console.log(`[adjustTemplateSectionsForColors] 컬러 수: ${colorCount}, 원본 섹션 수: ${sections.length}`);
+
+  // Deep copy를 위해 JSON parse/stringify (함수 없는 순수 데이터이므로 안전)
+  let adjustedSections: import('../types').SectionData[] = JSON.parse(JSON.stringify(sections));
+
+  // ──────────────────────────────────────────
+  // 1. 색상 안내 섹션 (sec-lookbook-colors) 슬롯 수 조정
+  // ──────────────────────────────────────────
+  const colorSectionIdx = adjustedSections.findIndex(s => s.id === 'sec-lookbook-colors');
+  if (colorSectionIdx !== -1) {
+    const colorSection = adjustedSections[colorSectionIdx];
+    if (colorSection.imageSlots && colorSection.imageSlots.length > 0) {
+      const existingSlots = colorSection.imageSlots;
+
+      if (colorCount <= existingSlots.length) {
+        // 컬러 수가 기존 슬롯 수 이하 → 필요한 만큼만 자르기
+        colorSection.imageSlots = existingSlots.slice(0, colorCount);
+      } else {
+        // 컬러 수가 기존 슬롯보다 많음 → 마지막 슬롯 패턴을 복제하여 추가
+        const lastSlot = existingSlots[existingSlots.length - 1];
+        for (let i = existingSlots.length; i < colorCount; i++) {
+          const newSlot = JSON.parse(JSON.stringify(lastSlot));
+          const colorIdx = i + 1;
+          newSlot.id = `slot-color-${colorIdx}`;
+          // 플레이스홀더 인덱스 교체: 마지막 슬롯의 COLOR_N을 새 인덱스로
+          newSlot.prompt = newSlot.prompt.replace(/\{\{COLOR_\d+\}\}/g, `{{COLOR_${colorIdx}}}`);
+          existingSlots.push(newSlot);
+        }
+        colorSection.imageSlots = existingSlots;
+      }
+
+      // layoutType도 컬러 수에 따라 자동 조정
+      if (colorCount === 1) {
+        colorSection.layoutType = 'full-width';
+      } else if (colorCount === 2) {
+        colorSection.layoutType = 'grid-2';
+      } else if (colorCount === 3) {
+        colorSection.layoutType = 'grid-3';
+      } else {
+        // 4개 이상: grid-1(유동 그리드)로 설정하여 기존 슬롯 전체 유지
+        colorSection.layoutType = 'grid-1';
+      }
+
+      console.log(`[adjustTemplateSectionsForColors] 색상 안내 슬롯 조정: ${existingSlots.length} → ${colorSection.imageSlots.length}, layout: ${colorSection.layoutType}`);
+    }
+  }
+
+  // ──────────────────────────────────────────
+  // 2. 코디 섹션 (sec-lookbook-styling1-c*) 개수 조정
+  // ──────────────────────────────────────────
+  const stylingPattern = /^sec-lookbook-styling1-c(\d+)$/;
+  const stylingSections = adjustedSections
+    .map((s, idx) => ({ section: s, originalIndex: idx, match: s.id.match(stylingPattern) }))
+    .filter(item => item.match !== null);
+
+  console.log(`[adjustTemplateSectionsForColors] 코디 섹션 감지: ${stylingSections.length}개`);
+
+  if (stylingSections.length > 0) {
+    const existingCount = stylingSections.length;
+
+    if (colorCount < existingCount) {
+      // 컬러 수가 적으면 → 초과 코디 섹션 제거
+      const sectionsToRemove = stylingSections.slice(colorCount).map(item => item.section.id);
+      adjustedSections = adjustedSections.filter(s => !sectionsToRemove.includes(s.id));
+      console.log(`[adjustTemplateSectionsForColors] 코디 섹션 축소: ${existingCount} → ${colorCount}, 제거: [${sectionsToRemove.join(', ')}]`);
+
+    } else if (colorCount > existingCount) {
+      // 컬러 수가 많으면 → 마지막 코디 섹션을 복제하여 추가
+      const lastStyling = stylingSections[stylingSections.length - 1];
+      const insertAfterIndex = lastStyling.originalIndex;
+
+      const newSections: import('../types').SectionData[] = [];
+      for (let i = existingCount; i < colorCount; i++) {
+        const colorIdx = i + 1;
+        const cloned: import('../types').SectionData = JSON.parse(JSON.stringify(lastStyling.section));
+
+        // ID, title, imagePrompt 내 컬러 인덱스 교체
+        cloned.id = `sec-lookbook-styling1-c${colorIdx}`;
+        cloned.title = `{{COLOR_${colorIdx}}} 코디`;
+        cloned.content = `${colorIdx}번째 컬러의 다양한 코디네이션과 디테일입니다.`;
+
+        if (cloned.imagePrompt) {
+          cloned.imagePrompt = cloned.imagePrompt.replace(/\{\{COLOR_\d+\}\}/g, `{{COLOR_${colorIdx}}}`);
+        }
+
+        // imageSlots 내 프롬프트의 컬러 인덱스 및 ID 교체
+        if (cloned.imageSlots) {
+          cloned.imageSlots = cloned.imageSlots.map((slot, slotIdx) => ({
+            ...slot,
+            id: `slot-s1c${colorIdx}-${slotIdx + 1}`,
+            prompt: slot.prompt.replace(/\{\{COLOR_\d+\}\}/g, `{{COLOR_${colorIdx}}}`)
+          }));
+        }
+
+        newSections.push(cloned);
+      }
+
+      // 마지막 코디 섹션 바로 뒤에 새 섹션들을 삽입
+      adjustedSections.splice(insertAfterIndex + 1, 0, ...newSections);
+      console.log(`[adjustTemplateSectionsForColors] 코디 섹션 확장: ${existingCount} → ${colorCount}, 추가: ${newSections.length}개`);
+    }
+  }
+
+  console.log(`[adjustTemplateSectionsForColors] 최종 섹션 수: ${adjustedSections.length}`);
+  return adjustedSections;
 };
 
 /**
@@ -569,6 +736,7 @@ const buildModelDescription = (
  * - 고정 이미지, 고정 문구, 레이아웃은 절대 변경 불가
  * - ★ layoutType에 따라 imageSlots 자동 생성
  * - ★ productData.colorOptions로 색상 플레이스홀더 대체
+ * - ★ colorOptions 개수에 따라 섹션/슬롯 동적 증감
  */
 const applyTemplateStructure = (
   aiResult: ProductAnalysis,
@@ -582,12 +750,16 @@ const applyTemplateStructure = (
 
   const colorOptions = productData?.colorOptions || [];
 
+  // ★ 컬러 옵션 개수에 따라 템플릿 섹션을 동적으로 조정
+  const adjustedSections = adjustTemplateSectionsForColors(template.sections, colorOptions.length);
+  console.log(`[applyTemplateStructure] 동적 조정 후 섹션 수: ${adjustedSections.length}`);
+
   // ★ AI가 추출한 상품 시각적 설명 (이미지 프롬프트에 사용)
   const productVisualDescription = (aiResult as any).productVisualDescription || aiResult.productName || 'the product';
   console.log('[applyTemplateStructure] 상품 시각적 설명:', productVisualDescription);
 
-  // 템플릿 섹션을 기준으로 구조 완전 유지
-  const mappedSections: SectionData[] = template.sections.map((templateSection, index) => {
+  // 동적 조정된 섹션을 기준으로 구조 매핑
+  const mappedSections: SectionData[] = adjustedSections.map((templateSection, index) => {
     // AI 결과에서 동일 ID의 섹션 찾기 (우선), 없으면 인덱스 기반 매칭
     const aiSection = aiResult.sections.find(s => s.id === templateSection.id)
       || aiResult.sections[index]
@@ -632,6 +804,17 @@ const applyTemplateStructure = (
       // [PRODUCT] 대체
       enhancedPrompt = enhancedPrompt.replace(/\[PRODUCT\]/gi, productVisualDescription);
 
+      // 모델 설정(인종, 분위기 등) 대체
+      const modelDesc = buildModelDescription(productData?.modelSettings);
+      if (modelDesc) {
+        enhancedPrompt = enhancedPrompt.replace(/\{\{MODEL_SETTINGS\}\}/gi, modelDesc);
+      } else {
+        // 모델 설정이 없으면 플레이스홀더를 제거하되, 주변의 연속된 콤마와 공백을 정리
+        enhancedPrompt = enhancedPrompt.replace(/,\s*\{\{MODEL_SETTINGS\}\}/gi, '');
+        enhancedPrompt = enhancedPrompt.replace(/\{\{MODEL_SETTINGS\}\}\s*,/gi, '');
+        enhancedPrompt = enhancedPrompt.replace(/\{\{MODEL_SETTINGS\}\}/gi, '');
+      }
+
       // 색상 플레이스홀더 대체
       enhancedPrompt = replaceColorPlaceholders(enhancedPrompt, colorOptions, slotIdx);
 
@@ -641,7 +824,27 @@ const applyTemplateStructure = (
       };
     });
 
-    console.log(`[applyTemplateStructure] 섹션 ${index + 1}: layout=${effectiveLayoutType}, slots=${enhancedSlots.length}`);
+    // ★ 후면 이미지 존재 시 3번째 슬롯 프롬프트를 강제 BACK VIEW로 교체
+    const hasBackImage = [
+      ...(productData?.mainImages || []),
+      ...(productData?.colorOptions?.flatMap(c => c.images) || [])
+    ].some(img => img.role === 'back');
+
+    const finalSlots = enhancedSlots.map((slot, slotIdx) => {
+      if (hasBackImage && slot.prompt.includes('EITHER Back View OR Side Profile')) {
+        console.log(`[applyTemplateStructure] ★ 후면 이미지 감지 → 슬롯 ${slotIdx + 1} BACK VIEW 강제 적용`);
+        return {
+          ...slot,
+          prompt: slot.prompt.replace(
+            /EITHER Back View OR Side Profile[^,]*/,
+            'BACK VIEW ONLY — this is MANDATORY because a back reference image was provided. Show the BACK DESIGN of the garment clearly. The model is facing AWAY from the camera, showing the complete back design of the garment from shoulders to hem'
+          )
+        };
+      }
+      return slot;
+    });
+
+    console.log(`[applyTemplateStructure] 섹션 ${index + 1}: layout=${effectiveLayoutType}, slots=${finalSlots.length}, hasBackImage=${hasBackImage}`);
 
     // 기본 섹션 구조 (템플릿에서 100% 유지)
     const baseSection: SectionData = {
@@ -649,7 +852,7 @@ const applyTemplateStructure = (
       id: templateSection.id,
       sectionType: templateSection.sectionType,
       layoutType: effectiveLayoutType,
-      imageSlots: enhancedSlots,  // ★ 상품 설명 + 색상 대체 적용된 이미지 슬롯
+      imageSlots: finalSlots,  // ★ 상품 설명 + 색상 대체 + 후면 강제화 적용된 이미지 슬롯
       fixedText: templateSection.fixedText,
       fixedImageBase64: templateSection.fixedImageBase64,
       fixedImageMimeType: templateSection.fixedImageMimeType,
@@ -1939,13 +2142,13 @@ Before generating, verify BOTH:
 1. Is there a REAL HUMAN BODY visible wearing this garment?
 2. Is the product VISUALLY IDENTICAL to the reference (every detail matches)?
 
-High quality, 4K resolution, professional fashion photography, editorial style.
+High quality, hyperrealistic, ultra photorealistic, shot on Canon EOS R5 with 85mm f/1.4 lens, natural lighting, RAW photo quality, 8K resolution. The image must look like a REAL PHOTOGRAPH taken by a professional photographer — NOT an AI-generated or CGI image. Realistic skin texture, natural fabric draping, authentic lighting with soft shadows.
         `.trim();
       }
     } else {
       // 원본 이미지가 없는 경우 - 모델 설정 적용
       const modelDescription = buildModelDescription(modelSettings);
-      fullPrompt = `Professional product photography, high quality, 4k: ${prompt}${modelDescription ? `\n\nModel requirements: ${modelDescription}` : ''}`;
+      fullPrompt = `Hyperrealistic professional fashion photography, shot on Canon EOS R5, natural lighting, RAW photo, ultra photorealistic: ${prompt}${modelDescription ? `\n\nModel requirements: ${modelDescription}` : ''}`;
     }
 
     const parts: GeminiPart[] = [{ text: fullPrompt } as GeminiTextPart];
