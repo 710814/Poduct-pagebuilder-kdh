@@ -185,6 +185,7 @@ export interface Template {
   createdAt: number;
 
   // ★ 새로운 필드
+  updatedAt?: number;                // 수정 시간 (빌트인 동기화 체크용)
   category?: string;                 // 템플릿 카테고리 (fashion, beauty 등)
   sourceImageThumbnail?: string;     // 원본 참조 이미지 썸네일 (선택)
   isBuiltin?: boolean;               // 빌트인 템플릿 여부 (압축 대상 등 식별용)
@@ -212,6 +213,7 @@ export interface UploadedFile {
   previewUrl: string;
   base64: string;
   mimeType: string;
+  role?: 'front' | 'back' | 'detail';  // 이미지 역할 (정면/후면/디테일)
 }
 
 /**
@@ -233,6 +235,8 @@ export interface ModelSettings {
   ageRange?: 'teens' | '20s' | '30s' | '40s' | '50s+' | 'any';  // 연령대
   gender?: 'female' | 'male' | 'any';  // 성별
   hairStyle?: string;  // 헤어 스타일 (예: "단발", "긴 생머리", "웨이브")
+  mood?: 'sexy' | 'elegant' | 'innocent' | 'casual' | 'sporty';  // 분위기/무드
+  modelCutStyle?: 'face_visible' | 'face_anonymous' | 'mirror_selfie';  // 모델컷 스타일
 }
 
 /**

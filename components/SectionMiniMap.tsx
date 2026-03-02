@@ -1,5 +1,5 @@
 import React from 'react';
-import { Image, LayoutGrid, Type, Columns, MoveUp, MoveDown, Trash2 } from 'lucide-react';
+import { Image, LayoutGrid, Type, Columns, Rows3, MoveUp, MoveDown, Trash2 } from 'lucide-react';
 import { SectionData } from '../types';
 
 interface SectionMiniMapProps {
@@ -31,10 +31,14 @@ const getBadgeInfo = (section: SectionData) => {
         };
     }
 
-    if (slotCount >= 3) {
+    if (layoutType === 'grid-1') {
+        return { icon: Rows3, label: '3행 그리드', color: 'bg-teal-50 border-teal-200 text-teal-600' };
+    }
+
+    if (slotCount >= 3 && layoutType !== 'grid-1') {
         return { icon: LayoutGrid, label: '3열', color: 'bg-emerald-50 border-emerald-200 text-emerald-600' };
     }
-    if (slotCount === 2) {
+    if (slotCount === 2 && layoutType !== 'grid-1') {
         return { icon: LayoutGrid, label: '2열', color: 'bg-green-50 border-green-200 text-green-600' };
     }
 

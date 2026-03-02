@@ -135,6 +135,15 @@ const SectionPreview: React.FC<{
                     </div>
                 );
 
+            case 'grid-1':
+                return (
+                    <div className="flex flex-col gap-1 h-full w-full">
+                        {Array.from({ length: Math.min(3, Math.max(1, imageSlotCount)) }).map((_, i) => (
+                            <ImageSlotBar key={i} count={1} className="flex-1" />
+                        ))}
+                    </div>
+                );
+
             case 'grid-2':
                 return (
                     <div className="flex gap-1 h-full">

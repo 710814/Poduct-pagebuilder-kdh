@@ -87,19 +87,27 @@ export const getTemplates = (): Template[] => {
   }
 
   // ★ 빌트인 템플릿 목록
-  const builtInTemplates = [FASHION_LOOKBOOK_TEMPLATE, OUTDOOR_CLOTHING_TEMPLATE];
+  const builtInTemplates = [
+    FASHION_LOOKBOOK_TEMPLATE,
+    OUTDOOR_CLOTHING_TEMPLATE,
+    FASHION_MIRROR_SELFIE_TEMPLATE
+  ];
   const builtInIds = new Set(builtInTemplates.map(t => t.id));
 
-  // localStorage에 빌트인 템플릿 ID가 있는지 확인 (사용자 수정 버전)
+  // localStorage에 빌트인 템플릿 ID가 있는지 확인
+  // userModifiedBuiltInIds: localStorage에 있으면서 updatedAt이 존재하는 (사용자가 명시적으로 수정한) 템플릿만 인정
   const userModifiedBuiltInIds = new Set(
-    userTemplates.filter(t => builtInIds.has(t.id)).map(t => t.id)
+    userTemplates.filter(t => builtInIds.has(t.id) && t.updatedAt).map(t => t.id)
   );
 
   // 사용자가 수정하지 않은 빌트인 템플릿만 코드 버전 추가
   const codeBuildIns = builtInTemplates.filter(t => !userModifiedBuiltInIds.has(t.id));
 
-  // 결과: 코드 빌트인(수정 안된 것) + 사용자 템플릿(수정된 빌트인 포함)
-  const result = [...codeBuildIns, ...userTemplates];
+  // 결과: 코드 빌트인(수정 안된 것) + 사용자 커스텀 템플릿 + 사용자가 수정한 빌트인
+  // (수정되지 않은 빌트인은 localStorage에 있더라도 updatedAt이 없으므로 무시)
+  const validUserTemplates = userTemplates.filter(t => !builtInIds.has(t.id) || t.updatedAt);
+
+  const result = [...codeBuildIns, ...validUserTemplates];
 
   return result;
 };
@@ -130,6 +138,23 @@ export const deleteTemplate = (id: string) => {
   const templates = getTemplates();
   const updated = templates.filter(t => t.id !== id);
   localStorage.setItem(TEMPLATE_STORAGE_KEY, JSON.stringify(updated));
+};
+
+const DEFAULT_TEMPLATE_KEY = 'pagegenie_default_template_id';
+
+/**
+ * 기본 템플릿 ID 가져오기
+ */
+export const getDefaultTemplateId = (): string => {
+  if (typeof window === 'undefined') return 'tpl-fashion-faceless-preset';
+  return localStorage.getItem(DEFAULT_TEMPLATE_KEY) || 'tpl-fashion-faceless-preset';
+};
+
+/**
+ * 기본 템플릿 설정하기
+ */
+export const setDefaultTemplateId = (id: string) => {
+  localStorage.setItem(DEFAULT_TEMPLATE_KEY, id);
 };
 
 // ============================================
@@ -178,7 +203,7 @@ const DIVERSE_POSES = {
  * 히어로 → 제품설명 → 색상(2열) → 코디1(컬러별 3장) → 코디설명 → 코디2(3장) → 제품정보
  */
 export const FASHION_LOOKBOOK_TEMPLATE: Template = {
-  id: 'tpl-fashion-lookbook-preset',
+  id: 'tpl-fashion-faceless-preset',
   name: '패션아이템 상세(얼굴익명)',
   description: '7섹션 구성: 히어로 → 제품설명 → 색상(2열) → 코디1(컬러별 3장) → 코디설명 → 코디2(3장) → 제품정보. 다양한 배경/앵글/포즈.',
   category: 'fashion',
@@ -520,33 +545,16 @@ export const FASHION_MIRROR_SELFIE_TEMPLATE: Template = {
  * 빌트인 템플릿 ID 목록
  */
 const BUILT_IN_TEMPLATE_IDS = [
-  'tpl-fashion-lookbook-preset',
+  'tpl-fashion-faceless-preset',
   'tpl-outdoor-clothing-preset',
   'tpl-fashion-mirror-selfie-preset'
 ];
 
 /**
  * 빌트인 템플릿 초기화 - 앱 시작 시 호출
+ * (더 이상 자동으로 localStorage에 저장하지 않고 동적으로 제공함)
  */
 export const initializeBuiltInTemplates = () => {
-  const existingTemplates = getTemplates();
-  const existingIds = new Set(existingTemplates.map(t => t.id));
-
-  // 패션 룩북 템플릿이 없으면 추가
-  if (!existingIds.has(FASHION_LOOKBOOK_TEMPLATE.id)) {
-    saveTemplate(FASHION_LOOKBOOK_TEMPLATE);
-    console.log('[TemplateService] Built-in template added:', FASHION_LOOKBOOK_TEMPLATE.name);
-  }
-
-  // 아웃도어 의류 템플릿이 없으면 추가
-  if (!existingIds.has(OUTDOOR_CLOTHING_TEMPLATE.id)) {
-    saveTemplate(OUTDOOR_CLOTHING_TEMPLATE);
-    console.log('[TemplateService] Built-in template added:', OUTDOOR_CLOTHING_TEMPLATE.name);
-  }
-
-  // 거울 셀카 룩북 템플릿이 없으면 추가
-  if (!existingIds.has(FASHION_MIRROR_SELFIE_TEMPLATE.id)) {
-    saveTemplate(FASHION_MIRROR_SELFIE_TEMPLATE);
-    console.log('[TemplateService] Built-in template added:', FASHION_MIRROR_SELFIE_TEMPLATE.name);
-  }
+  // 빌트인 템플릿은 항상 getTemplates()를 통해 최신 코드 버전을 바로 제공하므로
+  // localStorage에 별도 백업본을 만들지 않습니다.
 };

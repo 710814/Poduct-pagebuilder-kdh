@@ -151,7 +151,11 @@ export const StepAnalysis: React.FC<Props> = React.memo(({ analysis, onUpdate, o
             const slotPrompt = slot.prompt || section.imagePrompt || '';
             const matchedColorOption = findMatchingColorOption(slotPrompt, productInputData?.colorOptions);
             const colorOptionImage = matchedColorOption?.images?.[0];
-            const refImage = colorOptionImage || primaryFile;
+
+            // ★ 3번째 슬롯 + 후면 이미지가 있으면 후면 이미지를 참조로 우선 사용
+            const backImage = matchedColorOption?.images?.find(img => img.role === 'back')
+              || uploadedFiles.find(img => img.role === 'back');
+            const refImage = (i === 2 && backImage) ? backImage : (colorOptionImage || primaryFile);
 
             console.log(`[StepAnalysis Preview] 슬롯 ${i + 1}: 컬러 매칭 = ${matchedColorOption?.colorName || 'N/A'}, 참조 이미지 = ${refImage?.base64 ? 'O' : 'X'}`);
 

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { X, Table, LayoutTemplate, Plus, Trash2, Loader2, Save, Check, Info, Edit2, ArrowUp, ArrowDown, ChevronLeft, ChevronDown, ChevronUp, Layout, FileText, Image as ImageIcon, Upload, ToggleLeft, ToggleRight, Type, Cloud, CloudOff, RefreshCw, Layers } from 'lucide-react';
+import { X, Table, LayoutTemplate, Plus, Trash2, Loader2, Save, Check, Info, Edit2, ArrowUp, ArrowDown, ChevronLeft, ChevronDown, ChevronUp, Layout, FileText, Image as ImageIcon, Upload, ToggleLeft, ToggleRight, Type, Cloud, CloudOff, RefreshCw, Layers, Star } from 'lucide-react';
 import { getGasUrl, setGasUrl as saveGasUrl, getSheetId, setSheetId as saveSheetId, DEFAULT_GAS_URL } from '../services/googleSheetService';
-import { getTemplates, saveTemplate, deleteTemplate, createNewTemplate as createNewTemplateService } from '../services/templateService';
+import { getTemplates, saveTemplate, deleteTemplate, getDefaultTemplateId, setDefaultTemplateId, createNewTemplate as createNewTemplateService } from '../services/templateService';
 import { CATEGORY_OPTIONS } from '../services/categoryPresets';
 import { extractTemplateFromImage, fileToGenerativePart, getImageSlotCountForLayout } from '../services/geminiService';
 import {
@@ -75,6 +75,17 @@ const LAYOUT_OPTIONS: { value: LayoutType; label: string; icon: React.FC<{ class
         <rect x="2" y="6" width="8" height="2" rx="0.5" fill="currentColor" opacity="0.2" />
         <rect x="2" y="10" width="8" height="1.5" rx="0.5" fill="currentColor" opacity="0.15" />
         <rect x="2" y="13" width="6" height="1.5" rx="0.5" fill="currentColor" opacity="0.15" />
+      </svg>
+    )
+  },
+  {
+    value: 'grid-1',
+    label: '3행 그리드',
+    icon: ({ className }) => (
+      <svg viewBox="0 0 24 24" className={className}>
+        <rect x="4" y="4" width="16" height="4.5" rx="1" fill="currentColor" opacity="0.4" />
+        <rect x="4" y="9.5" width="16" height="4.5" rx="1" fill="currentColor" opacity="0.4" />
+        <rect x="4" y="15" width="16" height="4.5" rx="1" fill="currentColor" opacity="0.4" />
       </svg>
     )
   },
@@ -187,6 +198,7 @@ export const SettingsModal: React.FC<Props> = ({ isOpen, onClose }) => {
 
   // Template State
   const [templates, setTemplates] = useState<Template[]>([]);
+  const [defaultTemplateId, setDefaultTemplateIdState] = useState<string>('');
   const [isAnalyzing, setIsAnalyzing] = useState(false);
 
   // Template Editing State
@@ -225,6 +237,7 @@ export const SettingsModal: React.FC<Props> = ({ isOpen, onClose }) => {
       setGasUrlState(savedUrl || '');
       setSheetIdState(getSheetId());
       setTemplates(getTemplates());
+      setDefaultTemplateIdState(getDefaultTemplateId());
       setSaveStatus('idle');
       setEditingTemplate(null); // Reset edit mode on open
 
@@ -396,7 +409,11 @@ export const SettingsModal: React.FC<Props> = ({ isOpen, onClose }) => {
 
   const saveEditing = () => {
     if (editingTemplate) {
-      saveTemplate(editingTemplate);
+      const updatedTemplate = {
+        ...editingTemplate,
+        updatedAt: Date.now()
+      };
+      saveTemplate(updatedTemplate);
       setTemplates(getTemplates());
       setEditingTemplate(null);
       setIsCreatingNew(false); // 초기화
@@ -1052,6 +1069,18 @@ export const SettingsModal: React.FC<Props> = ({ isOpen, onClose }) => {
                           {new Date(tpl.createdAt).toLocaleDateString()}
                         </span>
                         <div className="flex gap-1">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setDefaultTemplateId(tpl.id);
+                              setDefaultTemplateIdState(tpl.id);
+                              toast.success('기본 템플릿으로 설정되었습니다.');
+                            }}
+                            className={`p-1.5 rounded-lg transition-colors ${defaultTemplateId === tpl.id ? 'text-yellow-500 bg-yellow-50' : 'text-gray-400 hover:text-yellow-500 hover:bg-yellow-50'}`}
+                            title="기본 템플릿 설정"
+                          >
+                            <Star className="w-4 h-4" fill={defaultTemplateId === tpl.id ? 'currentColor' : 'none'} />
+                          </button>
                           <button
                             className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
                             title="수정"

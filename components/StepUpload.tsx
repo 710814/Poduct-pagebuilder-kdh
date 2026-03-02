@@ -5,7 +5,7 @@ import {
   DollarSign, Percent, Trash2, User, ChevronDown, Check
 } from 'lucide-react';
 import { AppMode, UploadedFile, Template, ColorOption, ProductInputData, ModelSettings } from '../types';
-import { getTemplates } from '../services/templateService';
+import { getTemplates, getDefaultTemplateId } from '../services/templateService';
 import { optimizeImages, needsOptimization, optimizeImage } from '../utils/imageOptimizer';
 import { useToastContext } from '../contexts/ToastContext';
 
@@ -35,7 +35,7 @@ export const StepUpload: React.FC<Props> = ({ mode, onProductSubmit }) => {
   const colorImageInputRef = useRef<HTMLInputElement>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [templates, setTemplates] = useState<Template[]>([]);
-  const [selectedTemplateId, setSelectedTemplateId] = useState<string>("");
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string>(getDefaultTemplateId());
   const toast = useToastContext();
 
   // Upload Method State
@@ -65,6 +65,8 @@ export const StepUpload: React.FC<Props> = ({ mode, onProductSubmit }) => {
   const [modelAgeRange, setModelAgeRange] = useState<ModelSettings['ageRange']>('any');
   const [modelGender, setModelGender] = useState<ModelSettings['gender']>('any');
   const [modelHairStyle, setModelHairStyle] = useState('');
+  const [modelMood, setModelMood] = useState<ModelSettings['mood']>(undefined);
+  const [modelCutStyle, setModelCutStyle] = useState<ModelSettings['modelCutStyle']>(undefined);
 
   useEffect(() => {
     setTemplates(getTemplates());
@@ -308,12 +310,14 @@ export const StepUpload: React.FC<Props> = ({ mode, onProductSubmit }) => {
       mainImages,
       selectedTemplateId: selectedTemplateId || undefined,
       // 모델 설정 (하나라도 설정되어 있으면 포함)
-      modelSettings: (modelEthnicity !== 'any' || modelAgeRange !== 'any' || modelGender !== 'any' || modelHairStyle.trim())
+      modelSettings: (modelEthnicity !== 'any' || modelAgeRange !== 'any' || modelGender !== 'any' || modelHairStyle.trim() || modelMood || modelCutStyle)
         ? {
           ethnicity: modelEthnicity !== 'any' ? modelEthnicity : undefined,
           ageRange: modelAgeRange !== 'any' ? modelAgeRange : undefined,
           gender: modelGender !== 'any' ? modelGender : undefined,
-          hairStyle: modelHairStyle.trim() || undefined
+          hairStyle: modelHairStyle.trim() || undefined,
+          mood: modelMood || undefined,
+          modelCutStyle: modelCutStyle || undefined
         }
         : undefined
     };
@@ -474,6 +478,23 @@ export const StepUpload: React.FC<Props> = ({ mode, onProductSubmit }) => {
                 {mainImages.map((img, idx) => (
                   <div key={idx} className="relative group rounded-lg overflow-hidden aspect-square border border-gray-200">
                     <img src={img.previewUrl} alt="" className="w-full h-full object-cover" />
+                    {/* 이미지 역할 태그 버튼 */}
+                    <div className="absolute bottom-0 left-0 right-0 bg-black/60 px-1 py-0.5 flex gap-0.5 justify-center">
+                      <button
+                        onClick={(e) => { e.stopPropagation(); const updated = [...mainImages]; updated[idx] = { ...img, role: img.role === 'front' ? undefined : 'front' }; setMainImages(updated); }}
+                        className={`px-1.5 py-0.5 rounded text-[9px] font-bold transition-colors ${img.role === 'front' ? 'bg-blue-500 text-white' : 'bg-white/20 text-white/70 hover:bg-white/30'}`}
+                        title="정면 이미지"
+                      >
+                        정면
+                      </button>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); const updated = [...mainImages]; updated[idx] = { ...img, role: img.role === 'back' ? undefined : 'back' }; setMainImages(updated); }}
+                        className={`px-1.5 py-0.5 rounded text-[9px] font-bold transition-colors ${img.role === 'back' ? 'bg-orange-500 text-white' : 'bg-white/20 text-white/70 hover:bg-white/30'}`}
+                        title="후면 이미지 (후면 이미지 태그 시 코디컷에 후면 자동 생성)"
+                      >
+                        후면
+                      </button>
+                    </div>
                     <button
                       onClick={() => removeMainImage(idx)}
                       className="absolute top-1 right-1 bg-black/50 hover:bg-red-500 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
@@ -594,16 +615,16 @@ export const StepUpload: React.FC<Props> = ({ mode, onProductSubmit }) => {
                           value={newColorName}
                           onChange={(e) => setNewColorName(e.target.value)}
                           onKeyDown={(e) => {
-                             if (e.key === 'Enter' && newColorName) {
-                               e.preventDefault();
-                               addColorOption();
-                               setIsCustomColorMode(false);
-                               setNewColorName('');
-                             }
+                            if (e.key === 'Enter' && newColorName) {
+                              e.preventDefault();
+                              addColorOption();
+                              setIsCustomColorMode(false);
+                              setNewColorName('');
+                            }
                           }}
                           className="w-full border border-gray-300 rounded-lg p-2.5 pr-8 text-sm focus:ring-2 focus:ring-purple-500 outline-none"
                         />
-                        <button 
+                        <button
                           onClick={() => { setIsCustomColorMode(false); setNewColorName(''); }}
                           className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 p-1"
                         >
@@ -618,20 +639,20 @@ export const StepUpload: React.FC<Props> = ({ mode, onProductSubmit }) => {
                           ${isDropdownOpen ? 'ring-2 ring-purple-500 border-purple-500' : 'border-gray-300 hover:border-gray-400'}
                         `}
                       >
-                         <div className="flex items-center gap-2">
-                           {newColorName ? (
-                             <>
-                               <div 
-                                 className="w-5 h-5 rounded-full border border-gray-200 shadow-sm"
-                                 style={{ backgroundColor: COLOR_PRESETS.find(c => c.name === newColorName)?.hex || 'transparent' }}
-                               />
-                               <span className="text-gray-900 font-medium">{newColorName}</span>
-                             </>
-                           ) : (
-                             <span className="text-gray-400">Select color...</span>
-                           )}
-                         </div>
-                         <ChevronDown className={`w-4 h-4 text-gray-500 transition-transform ${isDropdownOpen ? 'rotate-180' : ''}`} />
+                        <div className="flex items-center gap-2">
+                          {newColorName ? (
+                            <>
+                              <div
+                                className="w-5 h-5 rounded-full border border-gray-200 shadow-sm"
+                                style={{ backgroundColor: COLOR_PRESETS.find(c => c.name === newColorName)?.hex || 'transparent' }}
+                              />
+                              <span className="text-gray-900 font-medium">{newColorName}</span>
+                            </>
+                          ) : (
+                            <span className="text-gray-400">Select color...</span>
+                          )}
+                        </div>
+                        <ChevronDown className={`w-4 h-4 text-gray-500 transition-transform ${isDropdownOpen ? 'rotate-180' : ''}`} />
                       </button>
                     )}
 
@@ -642,7 +663,7 @@ export const StepUpload: React.FC<Props> = ({ mode, onProductSubmit }) => {
                           {COLOR_PRESETS.map((preset) => {
                             const isAdded = colorOptions.some(opt => opt.colorName === preset.name);
                             const isSelected = newColorName === preset.name;
-                            
+
                             return (
                               <button
                                 key={preset.name}
@@ -661,7 +682,7 @@ export const StepUpload: React.FC<Props> = ({ mode, onProductSubmit }) => {
                                 `}
                               >
                                 <div className="flex items-center gap-3">
-                                  <div 
+                                  <div
                                     className="w-6 h-6 rounded-full border border-gray-200 shadow-sm shrink-0 transition-transform group-hover:scale-110"
                                     style={{ backgroundColor: preset.hex }}
                                   />
@@ -677,22 +698,22 @@ export const StepUpload: React.FC<Props> = ({ mode, onProductSubmit }) => {
                               </button>
                             );
                           })}
-                          
+
                           <div className="border-t border-gray-100 my-1 mx-2"></div>
-                          
+
                           <button
-                             type="button"
-                             onClick={() => {
-                               setIsCustomColorMode(true);
-                               setNewColorName('');
-                               setIsDropdownOpen(false);
-                             }}
-                             className="w-full flex items-center gap-3 p-2.5 rounded-lg hover:bg-gray-100 text-left transition-colors"
+                            type="button"
+                            onClick={() => {
+                              setIsCustomColorMode(true);
+                              setNewColorName('');
+                              setIsDropdownOpen(false);
+                            }}
+                            className="w-full flex items-center gap-3 p-2.5 rounded-lg hover:bg-gray-100 text-left transition-colors"
                           >
-                             <div className="w-6 h-6 rounded-full border-2 border-dashed border-gray-300 flex items-center justify-center bg-gray-50 text-gray-400 group-hover:border-gray-400 group-hover:text-gray-500">
-                               <Plus className="w-3.5 h-3.5" />
-                             </div>
-                             <span className="text-sm font-medium text-gray-600 group-hover:text-gray-800">Direct Input (Custom)</span>
+                            <div className="w-6 h-6 rounded-full border-2 border-dashed border-gray-300 flex items-center justify-center bg-gray-50 text-gray-400 group-hover:border-gray-400 group-hover:text-gray-500">
+                              <Plus className="w-3.5 h-3.5" />
+                            </div>
+                            <span className="text-sm font-medium text-gray-600 group-hover:text-gray-800">Direct Input (Custom)</span>
                           </button>
                         </div>
                       </div>
@@ -747,6 +768,20 @@ export const StepUpload: React.FC<Props> = ({ mode, onProductSubmit }) => {
                           {opt.images.map((img, imgIdx) => (
                             <div key={imgIdx} className="relative w-14 h-14 rounded-lg overflow-hidden border border-gray-200 group">
                               <img src={img.previewUrl} alt="" className="w-full h-full object-cover" />
+                              {/* 컬러 이미지 역할 태그 */}
+                              <div className="absolute bottom-0 left-0 right-0 bg-black/60 flex gap-px justify-center">
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    const updated = colorOptions.map(o => o.id === opt.id ? { ...o, images: o.images.map((im, ii) => ii === imgIdx ? { ...im, role: im.role === 'back' ? undefined : 'back' as const } : im) } : o);
+                                    setColorOptions(updated);
+                                  }}
+                                  className={`px-1 py-px rounded text-[8px] font-bold transition-colors ${img.role === 'back' ? 'bg-orange-500 text-white' : 'bg-white/20 text-white/60 hover:bg-white/30'}`}
+                                  title="후면 이미지"
+                                >
+                                  후면
+                                </button>
+                              </div>
                               <button
                                 onClick={() => removeColorImage(opt.id, imgIdx)}
                                 className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
@@ -794,6 +829,20 @@ export const StepUpload: React.FC<Props> = ({ mode, onProductSubmit }) => {
                       <option value="western">서양인</option>
                     </select>
                   </div>
+                  {/* 모델컷 스타일 */}
+                  <div>
+                    <label className="block text-[10px] text-gray-400 mb-1">모델컷 스타일</label>
+                    <select
+                      value={modelCutStyle || ''}
+                      onChange={(e) => setModelCutStyle(e.target.value as ModelSettings['modelCutStyle'] || undefined)}
+                      className="w-full border border-gray-300 rounded-lg p-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white"
+                    >
+                      <option value="">기본 (얼굴 비노출)</option>
+                      <option value="face_visible">얼굴 노출</option>
+                      <option value="face_anonymous">얼굴 비노출 (코/입 아래)</option>
+                      <option value="mirror_selfie">거울 셀카</option>
+                    </select>
+                  </div>
                   {/* 연령대 */}
                   <div>
                     <label className="block text-[10px] text-gray-400 mb-1">연령대</label>
@@ -839,6 +888,22 @@ export const StepUpload: React.FC<Props> = ({ mode, onProductSubmit }) => {
                       <option value="ponytail">포니테일</option>
                       <option value="bun hairstyle">업스타일</option>
                       <option value="short hair">숏컷(남성)</option>
+                    </select>
+                  </div>
+                  {/* 분위기/무드 */}
+                  <div>
+                    <label className="block text-[10px] text-gray-400 mb-1">분위기</label>
+                    <select
+                      value={modelMood || ''}
+                      onChange={(e) => setModelMood(e.target.value as ModelSettings['mood'] || undefined)}
+                      className="w-full border border-gray-300 rounded-lg p-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white"
+                    >
+                      <option value="">무관</option>
+                      <option value="sexy">섹시/매혹</option>
+                      <option value="elegant">우아함/세련</option>
+                      <option value="innocent">청순/내추럴</option>
+                      <option value="casual">캐주얼/편안</option>
+                      <option value="sporty">스포티/활동적</option>
                     </select>
                   </div>
                 </div>
