@@ -421,14 +421,22 @@ const AppContent: React.FC = () => {
             }
 
             const matchedColorOption = findMatchingColorOption(slotPrompt, productInputData?.colorOptions);
-            const colorOptionImage = matchedColorOption?.images?.[0];
+            // ★ 후면 슬롯인 경우 후면 이미지를 참조로 우선 사용
+            const isBackViewSlot = slotPrompt.includes('BACK VIEW') || slotPrompt.includes('back design');
+            let colorOptionImage = matchedColorOption?.images?.[0];
+            if (isBackViewSlot) {
+              const backImgFromColor = matchedColorOption?.images?.find(img => img.role === 'back');
+              const backImgFromMain = productInputData?.mainImages?.find(img => img.role === 'back');
+              colorOptionImage = backImgFromColor || backImgFromMain || colorOptionImage;
+            }
             const refImage = colorOptionImage || primaryFile;
 
-            console.log(`[Generate] 섹션 "${section.title}" - 슬롯 ${i + 1}/${section.imageSlots.length}: "${slotPrompt.slice(0, 50)}..." (참조: ${matchedColorOption ? `컬러옵션[${matchedColorOption.colorName}]` : '기본이미지'})`);
+            console.log(`[Generate] 섹션 "${section.title}" - 슬롯 ${i + 1}/${section.imageSlots.length}: "${slotPrompt.slice(0, 50)}..." (참조: ${matchedColorOption ? `컬러옵션[${matchedColorOption.colorName}]` : '기본이미지'}, 후면슬롯: ${isBackViewSlot})`);
 
             try {
+              // ★ [Bugfix] 치환된 slotPrompt를 사용 (이전: 원본 slot.prompt 전달로 컬러 불일치 발생)
               const imageUrl = await generateSectionImage(
-                slot.prompt || section.imagePrompt || '',
+                slotPrompt,
                 refImage?.base64,
                 refImage?.mimeType,
                 mode,
@@ -478,11 +486,18 @@ const AppContent: React.FC = () => {
             });
           }
           const matchedColor = findMatchingColorOption(sectionPrompt, productInputData?.colorOptions);
-          const refImg = matchedColor?.images?.[0] || primaryFile;
+          // ★ 후면 슬롯인 경우 후면 이미지를 참조로 우선 사용
+          const isBackSection = sectionPrompt.includes('BACK VIEW') || sectionPrompt.includes('back design');
+          let refImg = matchedColor?.images?.[0] || primaryFile;
+          if (isBackSection) {
+            const backFromColor = matchedColor?.images?.find(img => img.role === 'back');
+            const backFromMain = productInputData?.mainImages?.find(img => img.role === 'back');
+            refImg = backFromColor || backFromMain || refImg;
+          }
 
           const imageUrl = await generateSectionImage(
             sectionPrompt,
-            refImg?.base64, // Use matched color image or default
+            refImg?.base64,
             refImg?.mimeType,
             mode,
             productInputData?.modelSettings

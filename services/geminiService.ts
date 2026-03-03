@@ -506,11 +506,11 @@ export const findMatchingColorOption = (
 /**
  * 이미지 프롬프트에서 색상 플레이스홀더를 실제 컬러 옵션으로 대체
  * - {{COLOR_1}}, {{COLOR_2}}, {{COLOR_3}} 등을 colorOptions 이름으로 대체
- * - 하드코딩된 색상 패턴도 감지하여 대체 시도
+ * - HEX 코드가 있으면 함께 포함하여 AI의 정확도 향상
  */
 const replaceColorPlaceholders = (
   prompt: string,
-  colorOptions: { colorName: string }[],
+  colorOptions: { colorName: string; hexCode?: string }[],
   slotIndex: number
 ): string => {
   if (!prompt || colorOptions.length === 0) return prompt;
@@ -520,13 +520,10 @@ const replaceColorPlaceholders = (
   // 플레이스홀더 방식: {{COLOR_1}}, {{COLOR_2}} 등
   colorOptions.forEach((color, idx) => {
     const placeholder = `{{COLOR_${idx + 1}}}`;
-    result = result.replace(new RegExp(placeholder, 'gi'), color.colorName);
+    // ★ HEX 코드가 있으면 함께 포함하여 AI의 컬러 정확도 향상
+    const hexInfo = color.hexCode ? ` (exact color code: ${color.hexCode})` : '';
+    result = result.replace(new RegExp(placeholder, 'gi'), `${color.colorName}${hexInfo}`);
   });
-
-  // 현재 슬롯에 해당하는 컬러로 대체하는 로직 제거
-  // 3색상 템플릿처럼 한 섹션에 여러 슬롯(3개)이 있는 경우,
-  // slotIndex(0,1,2)가 colorOptions(0,1,2)와 잘못 매핑되어 색상이 섞이는 문제 발생.
-  // 명시적인 {{COLOR_N}} 플레이스홀더만 사용하도록 변경.
 
   return result;
 };
@@ -2091,8 +2088,18 @@ High quality, professional product photography without any text overlay. Pixel-p
         // 모델 설정을 프롬프트에 추가
         const modelDescription = buildModelDescription(modelSettings);
 
+        // ★ 후면 프롬프트 감지 시 참조 이미지가 후면임을 명시
+        const isBackViewPrompt = prompt.includes('BACK VIEW') || prompt.includes('back design');
+        const backViewPreamble = isBackViewPrompt ? `## ⚠️ BACK VIEW REFERENCE IMAGE PROVIDED
+The reference image shows the BACK DESIGN of the garment.
+You MUST replicate this exact back design: same pattern, texture, stitching, decorations, length, and ALL visual details.
+DO NOT invent, modify, or guess any back design elements. Copy them EXACTLY from the reference image.
+The model must be facing AWAY from camera, showing the complete back of the garment.
+
+` : '';
+
         // ★ 두 가지 요구사항을 동등하게 병렬 배치
-        fullPrompt = `
+        fullPrompt = `${backViewPreamble}
 ## ⚠️ TWO EQUALLY CRITICAL REQUIREMENTS - MUST SATISFY BOTH:
 
 ### REQUIREMENT A: REAL HUMAN MODEL (NOT MANNEQUIN)
@@ -2112,6 +2119,10 @@ The product MUST be VISUALLY IDENTICAL to the reference image.
 - Logo position, size, and design must match if present
 - Pocket placement, collar/neckline shape, sleeve length must be exact
 - The product must be recognizable as the EXACT SAME item, not a similar one
+- ⚠️ COLOR ACCURACY IS CRITICAL: The garment color must be the EXACT shade specified in the prompt.
+  If a specific color name is mentioned (e.g., "ivory", "wine", "beige"), the garment MUST be that exact color.
+  DO NOT substitute with a similar color. DO NOT darken, lighten, or shift the hue.
+  If a HEX color code is provided, match it precisely.
 
 ⚠️ BOTH requirements are equally critical. Do NOT sacrifice product accuracy for model quality or vice versa.
 
