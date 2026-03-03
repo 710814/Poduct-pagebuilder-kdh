@@ -529,10 +529,10 @@ const replaceColorPlaceholders = (
 };
 
 /**
- * 모델 설정을 이미지 생성 프롬프트용 텍스트로 변환
- * - 빈 설정이면 빈 문자열 반환
+ * 모델 외모 설정만 프롬프트용 텍스트로 변환 (인종, 성별, 연령, 헤어, 분위기)
+ * - 모델컷 스타일(촬영 지시)은 포함하지 않음
  */
-const buildModelDescription = (
+const buildModelAppearanceDescription = (
   modelSettings?: import('../types').ModelSettings
 ): string => {
   if (!modelSettings) return '';
@@ -584,21 +584,82 @@ const buildModelDescription = (
     }
   }
 
-  // 모델컷 스타일
-  if (modelSettings.modelCutStyle) {
-    const cutStyleMap: Record<string, string> = {
-      'face_visible': 'FULL FACE VISIBLE with clear facial features, natural expression, looking at or near camera',
-      'face_anonymous': 'Face CROPPED at NOSE level, showing chin, lips, jawline, and full neckline. NO eyes visible. Emphasis on garment and body silhouette',
-      'mirror_selfie': 'Casual SELFIE-STYLE photo angle as if taken by the model themselves. Camera at slightly elevated arm-length angle. Natural relaxed pose, one hand may be near hair or garment. Face CROPPED at nose level, NO eyes visible. Clean simple background with soft bokeh. NO mirror visible, NO phone visible, NO reflection. Commercial e-commerce quality with focus on outfit fit and styling'
-    };
-    if (cutStyleMap[modelSettings.modelCutStyle]) {
-      parts.push(cutStyleMap[modelSettings.modelCutStyle]);
-    }
-  }
-
   if (parts.length === 0) return '';
 
   return parts.join(', ');
+};
+
+/**
+ * 모델컷 스타일을 최상위 촬영 지시(카메라 앵글 오버라이드)로 변환
+ * - 이 지시는 프롬프트의 다른 촬영 앵글 지시보다 우선시되어야 함
+ * - 빈 설정이면 빈 문자열 반환
+ */
+const buildModelCutStyleDirective = (
+  modelSettings?: import('../types').ModelSettings
+): string => {
+  if (!modelSettings?.modelCutStyle) return '';
+
+  const cutStyleDirectiveMap: Record<string, string> = {
+    'face_visible': `## ⚠️ FACE VISIBILITY OVERRIDE (CRITICAL - OVERRIDES ALL FACE CROPPING INSTRUCTIONS):
+The model's FULL FACE MUST be clearly visible in the image.
+- Show complete facial features: eyes, nose, mouth, jawline
+- Natural, confident expression looking at or near camera
+- DO NOT crop the face at nose level or any level
+- DO NOT hide or obscure any part of the face
+- The face should be clearly recognizable and well-lit`,
+
+    'face_anonymous': `## ⚠️ FACE ANONYMITY OVERRIDE (CRITICAL):
+The model's face MUST be cropped at NOSE level.
+- Show only: chin, lips, jawline, and full neckline
+- NO eyes visible in the final image
+- Emphasis on garment and body silhouette
+- This is a standard e-commerce anonymous model shot`,
+
+    'mirror_selfie': `## ⚠️ CAMERA ANGLE OVERRIDE (CRITICAL - OVERRIDES ALL OTHER ANGLE/FRAMING INSTRUCTIONS):
+This photo MUST look like a casual SELFIE taken by the person themselves, NOT a professional studio shot.
+- CAMERA POSITION: slightly elevated, at arm's length distance (approximately 60-80cm from face)
+- The person appears to be holding an invisible smartphone with one hand
+- SELFIE ANGLE: slightly looking up toward the camera, natural selfie perspective with mild foreshortening
+- One arm may be partially extended upward (the arm holding the phone)
+- The other hand can be near hair, on hip, or adjusting the garment casually
+- POSE: relaxed, casual, natural — as if quickly checking their outfit before going out
+- Face CROPPED at nose level, NO eyes visible (maintain anonymity)
+- Background: clean, simple, with soft natural bokeh — like a bedroom, hallway, or fitting room
+- NO mirror reflection visible, NO phone visible, NO selfie stick
+- The image should feel authentic and personal, like an Instagram outfit-of-the-day post
+- IMPORTANT: Ignore any conflicting framing instructions like "WAIST-UP shot" or "UPPER BODY CLOSE-UP" — the selfie angle takes priority`
+  };
+
+  return cutStyleDirectiveMap[modelSettings.modelCutStyle] || '';
+};
+
+/**
+ * 모델 설정을 이미지 생성 프롬프트용 텍스트로 변환 (기존 호환성 유지)
+ * - 외모 + 모델컷 스타일을 합쳐서 반환
+ * - 빈 설정이면 빈 문자열 반환
+ */
+const buildModelDescription = (
+  modelSettings?: import('../types').ModelSettings
+): string => {
+  if (!modelSettings) return '';
+
+  const appearance = buildModelAppearanceDescription(modelSettings);
+
+  // 모델컷 스타일은 간략한 인라인 형태로 포함 (기존 호환성)
+  const cutStyleParts: string[] = [];
+  if (modelSettings.modelCutStyle) {
+    const cutStyleMap: Record<string, string> = {
+      'face_visible': 'FULL FACE VISIBLE with clear facial features, natural expression',
+      'face_anonymous': 'Face CROPPED at NOSE level, NO eyes visible',
+      'mirror_selfie': 'Casual SELFIE ANGLE as if taken by model, slightly elevated arm-length camera angle, natural relaxed pose'
+    };
+    if (cutStyleMap[modelSettings.modelCutStyle]) {
+      cutStyleParts.push(cutStyleMap[modelSettings.modelCutStyle]);
+    }
+  }
+
+  const allParts = [appearance, ...cutStyleParts].filter(p => p.length > 0);
+  return allParts.join(', ');
 };
 
 /**
@@ -795,16 +856,37 @@ const applyTemplateStructure = (
     );
 
     // ★ 슬롯별로 [PRODUCT] 대체 및 색상 플레이스홀더 대체
+    const modelCutStyle = productData?.modelSettings?.modelCutStyle;
     const enhancedSlots = autoGeneratedSlots.map((slot, slotIdx) => {
       let enhancedPrompt = slot.prompt;
 
       // [PRODUCT] 대체
       enhancedPrompt = enhancedPrompt.replace(/\[PRODUCT\]/gi, productVisualDescription);
 
-      // 모델 설정(인종, 분위기 등) 대체
-      const modelDesc = buildModelDescription(productData?.modelSettings);
-      if (modelDesc) {
-        enhancedPrompt = enhancedPrompt.replace(/\{\{MODEL_SETTINGS\}\}/gi, modelDesc);
+      // ★ 모델컷 스타일에 따라 슬롯 프롬프트의 촬영 지시를 교체 (충돌 방지)
+      if (modelCutStyle === 'mirror_selfie') {
+        // 거울셀카: 기존 촬영 앵글 지시를 셀카 앵글로 교체
+        const selfieAngleReplacement = 'SELFIE-STYLE ANGLE shot — camera at arm-length, slightly elevated, casual selfie perspective';
+        enhancedPrompt = enhancedPrompt.replace(/WAIST-UP PRODUCT-FOCUSED shot from chin down to hip/gi, selfieAngleReplacement);
+        enhancedPrompt = enhancedPrompt.replace(/UPPER BODY CLOSE-UP shot from neckline to waist/gi, selfieAngleReplacement);
+        enhancedPrompt = enhancedPrompt.replace(/UPPER BODY PRODUCT-CENTERED shot from chin down/gi, selfieAngleReplacement);
+        enhancedPrompt = enhancedPrompt.replace(/WAIST-UP to HIP PRODUCT-FOCUSED shot/gi, selfieAngleReplacement);
+        enhancedPrompt = enhancedPrompt.replace(/WAIST-UP 3\/4 ANGLE shot/gi, selfieAngleReplacement);
+        enhancedPrompt = enhancedPrompt.replace(/3\/4 BODY shot from chin down showing full neckline and product silhouette/gi, 'SELFIE-STYLE shot from slightly elevated angle, face cropped at nose level, showing upper body and product');
+        enhancedPrompt = enhancedPrompt.replace(/UPPER BODY CLOSE-UP from neckline to waist/gi, selfieAngleReplacement);
+        console.log(`[applyTemplateStructure] ★ 거울셀카: 슬롯 ${slotIdx + 1} 촬영 지시 → 셀카 앵글로 교체`);
+      } else if (modelCutStyle === 'face_visible') {
+        // 얼굴 노출: Face CROPPED 지시를 FULL FACE VISIBLE로 교체
+        enhancedPrompt = enhancedPrompt.replace(/Face CROPPED at NOSE level[^.]*\./gi, 'FULL FACE VISIBLE with clear facial features, natural expression.');
+        enhancedPrompt = enhancedPrompt.replace(/Face CROPPED at nose level[^.]*\./gi, 'FULL FACE VISIBLE with clear facial features, natural expression.');
+        enhancedPrompt = enhancedPrompt.replace(/NO eyes visible/gi, 'eyes clearly visible, natural expression');
+        console.log(`[applyTemplateStructure] ★ 얼굴 노출: 슬롯 ${slotIdx + 1} Face CROPPED → FULL FACE VISIBLE로 교체`);
+      }
+
+      // 모델 외모 설정(인종, 분위기 등)만 {{MODEL_SETTINGS}}에 대체 (모델컷 스타일 제외)
+      const modelAppearanceDesc = buildModelAppearanceDescription(productData?.modelSettings);
+      if (modelAppearanceDesc) {
+        enhancedPrompt = enhancedPrompt.replace(/\{\{MODEL_SETTINGS\}\}/gi, modelAppearanceDesc);
       } else {
         // 모델 설정이 없으면 플레이스홀더를 제거하되, 주변의 연속된 콤마와 공백을 정리
         enhancedPrompt = enhancedPrompt.replace(/,\s*\{\{MODEL_SETTINGS\}\}/gi, '');
@@ -821,22 +903,35 @@ const applyTemplateStructure = (
       };
     });
 
-    // ★ 후면 이미지 존재 시 3번째 슬롯 프롬프트를 강제 BACK VIEW로 교체
+    // ★ 후면 이미지 존재 여부에 따라 3번째 슬롯 프롬프트를 조건부 교체
     const hasBackImage = [
       ...(productData?.mainImages || []),
       ...(productData?.colorOptions?.flatMap(c => c.images) || [])
     ].some(img => img.role === 'back');
 
     const finalSlots = enhancedSlots.map((slot, slotIdx) => {
-      if (hasBackImage && slot.prompt.includes('EITHER Back View OR Side Profile')) {
-        console.log(`[applyTemplateStructure] ★ 후면 이미지 감지 → 슬롯 ${slotIdx + 1} BACK VIEW 강제 적용`);
-        return {
-          ...slot,
-          prompt: slot.prompt.replace(
-            /EITHER Back View OR Side Profile[^,]*/,
-            'BACK VIEW ONLY — this is MANDATORY because a back reference image was provided. Show the BACK DESIGN of the garment clearly. The model is facing AWAY from the camera, showing the complete back design of the garment from shoulders to hem'
-          )
-        };
+      if (slot.prompt.includes('EITHER Back View OR Side Profile')) {
+        if (hasBackImage) {
+          // ★ 후면 이미지가 있으면 BACK VIEW 강제 적용
+          console.log(`[applyTemplateStructure] ★ 후면 이미지 감지 → 슬롯 ${slotIdx + 1} BACK VIEW 강제 적용`);
+          return {
+            ...slot,
+            prompt: slot.prompt.replace(
+              /EITHER Back View OR Side Profile[^,]*/,
+              'BACK VIEW ONLY — this is MANDATORY because a back reference image was provided. Show the BACK DESIGN of the garment clearly. The model is facing AWAY from the camera, showing the complete back design of the garment from shoulders to hem'
+            )
+          };
+        } else {
+          // ★ 후면 이미지가 없으면 BACK VIEW 관련 프롬프트를 정면 촬영으로 교체
+          console.log(`[applyTemplateStructure] ★ 후면 이미지 없음 → 슬롯 ${slotIdx + 1} 정면 촬영 프롬프트로 교체 (BACK VIEW 제거)`);
+          return {
+            ...slot,
+            prompt: slot.prompt.replace(
+              /EITHER Back View OR Side Profile[^,]*/,
+              'PRODUCT-FOCUSED WAIST-UP shot, 3/4 angle view showing the front of the garment, relaxed pose, clean blurred background. DO NOT show back view'
+            )
+          };
+        }
       }
       return slot;
     });
@@ -2085,8 +2180,12 @@ High quality, professional product photography without any text overlay. Pixel-p
           `.trim();
         }
       } else {
-        // 모델 설정을 프롬프트에 추가
-        const modelDescription = buildModelDescription(modelSettings);
+        // ★ 모델 설정을 분리하여 프롬프트에 추가 (외모와 촬영 스타일 분리)
+        const modelAppearance = buildModelAppearanceDescription(modelSettings);
+        const modelCutStyleDirective = buildModelCutStyleDirective(modelSettings);
+
+        console.log('[generateSectionImage] 모델 외모:', modelAppearance || '(없음)');
+        console.log('[generateSectionImage] 모델컷 스타일:', modelSettings?.modelCutStyle || '(없음)');
 
         // ★ 후면 프롬프트 감지 시 참조 이미지가 후면임을 명시
         const isBackViewPrompt = prompt.includes('BACK VIEW') || prompt.includes('back design');
@@ -2099,7 +2198,7 @@ The model must be facing AWAY from camera, showing the complete back of the garm
 ` : '';
 
         // ★ 두 가지 요구사항을 동등하게 병렬 배치
-        fullPrompt = `${backViewPreamble}
+        fullPrompt = `${modelCutStyleDirective ? `${modelCutStyleDirective}\n\n` : ''}${backViewPreamble}
 ## ⚠️ TWO EQUALLY CRITICAL REQUIREMENTS - MUST SATISFY BOTH:
 
 ### REQUIREMENT A: REAL HUMAN MODEL (NOT MANNEQUIN)
@@ -2133,17 +2232,17 @@ The ENTIRE product must be fully visible.
 - For full-body shots, show from head (or chin if anonymous) to feet
 - For upper-body shots, show from chin down to waist/hip with full shoulders and arms
 
-${modelDescription ? `## MODEL APPEARANCE:
-- The model should be: ${modelDescription}
+${modelAppearance ? `## MODEL APPEARANCE:
+- The model should be: ${modelAppearance}
 - The product must be worn by this model naturally
 ` : ''}
 
 ## WHAT YOU CAN CHANGE:
 - Background setting and environment
 - Lighting style and direction
-- Camera angle and composition
+${!modelCutStyleDirective ? '- Camera angle and composition' : '- Camera angle MUST follow the override directive above'}
 - Props and context elements
-${modelDescription ? '- Model appearance as specified above' : ''}
+${modelAppearance ? '- Model appearance as specified above' : ''}
 
 ## PHOTO SPECIFICATIONS:
 ${prompt}
@@ -2152,6 +2251,7 @@ ${prompt}
 Before generating, verify BOTH:
 1. Is there a REAL HUMAN BODY visible wearing this garment?
 2. Is the product VISUALLY IDENTICAL to the reference (every detail matches)?
+${modelCutStyleDirective ? '3. Does the camera angle match the OVERRIDE directive at the top?' : ''}
 
 High quality, hyperrealistic, ultra photorealistic, shot on Canon EOS R5 with 85mm f/1.4 lens, natural lighting, RAW photo quality, 8K resolution. The image must look like a REAL PHOTOGRAPH taken by a professional photographer — NOT an AI-generated or CGI image. Realistic skin texture, natural fabric draping, authentic lighting with soft shadows.
         `.trim();
@@ -2304,8 +2404,8 @@ const BACKGROUND_PROMPTS: Record<BackgroundType, string> = {
 /**
  * 이미지 고도화 유형별 프롬프트 템플릿
  */
-const ENHANCEMENT_PROMPT_TEMPLATES: Record<ImageEnhancementType, (product: string, options: ImageEnhancementOptions, modelDesc: string) => string> = {
-  background_change: (product, options, _) => {
+const ENHANCEMENT_PROMPT_TEMPLATES: Record<ImageEnhancementType, (product: string, options: ImageEnhancementOptions, modelDesc: string, cutStyleDirective?: string) => string> = {
+  background_change: (product, options, _, __) => {
     const bgPrompt = options.backgroundType ? BACKGROUND_PROMPTS[options.backgroundType] : BACKGROUND_PROMPTS.studio_white;
     return `Professional product photography of ${product}. 
 ${bgPrompt}. 
@@ -2314,10 +2414,11 @@ High quality, 4K resolution, e-commerce ready photography.
 ${options.customPrompt || ''}`.trim();
   },
 
-  model_shot: (product, options, modelDesc) => {
+  model_shot: (product, options, modelDesc, cutStyleDirective) => {
     const modelDescription = modelDesc || 'a professional model';
-    return `Fashion photography of ${modelDescription} wearing/holding ${product}.
-Full body shot, natural confident pose, looking at camera.
+    const cutStyleSection = cutStyleDirective ? `${cutStyleDirective}\n\n` : '';
+    return `${cutStyleSection}Fashion photography of ${modelDescription} wearing/holding ${product}.
+${!cutStyleDirective ? 'Full body shot, natural confident pose, looking at camera.' : 'The camera angle and pose MUST follow the override directive above.'}
 Clean studio or lifestyle background, professional lighting.
 The product (${product}) must be clearly visible and the main focus.
 High quality, 4K resolution, fashion e-commerce photography.
@@ -2377,14 +2478,20 @@ export const enhanceProductImage = async (
     const productDescription = await analyzeProductForEnhancement(base64Image, mimeType);
     onProgress?.('analyzed', `상품 분석 완료: ${productDescription.slice(0, 50)}...`);
 
-    // 2단계: 모델 설명 생성 (모델컷인 경우)
-    const modelDesc = options.type === 'model_shot'
-      ? buildModelDescription(options.modelSettings)
+    // 2단계: 모델 설명 생성 (모델컷인 경우) — 외모와 촬영 스타일 분리
+    const modelAppearanceDesc = options.type === 'model_shot'
+      ? buildModelAppearanceDescription(options.modelSettings)
+      : '';
+    const cutStyleDirective = options.type === 'model_shot'
+      ? buildModelCutStyleDirective(options.modelSettings)
       : '';
 
-    // 3단계: 프롬프트 생성
+    console.log('[enhanceProductImage] 모델 외모:', modelAppearanceDesc || '(없음)');
+    console.log('[enhanceProductImage] 모델컷 스타일:', options.modelSettings?.modelCutStyle || '(없음)');
+
+    // 3단계: 프롬프트 생성 (모델컷 스타일 지시를 별도로 전달)
     const promptBuilder = ENHANCEMENT_PROMPT_TEMPLATES[options.type];
-    const prompt = promptBuilder(productDescription, options, modelDesc);
+    const prompt = promptBuilder(productDescription, options, modelAppearanceDesc, cutStyleDirective);
 
     console.log('[enhanceProductImage] Generated prompt:', prompt);
     onProgress?.('generating', '고도화된 이미지를 생성하고 있습니다...');
