@@ -224,6 +224,8 @@ export interface ColorOption {
   colorName: string;           // 색상명 (예: "와인", "베이지", "그레이")
   hexCode?: string;            // 색상 코드 (선택, 예: "#8B0000")
   images: UploadedFile[];      // 해당 색상의 상품 이미지들
+  autoExtractedHex?: string;   // 자동 추출된 원본 HEX (사용자 수정 전)
+  extractionConfidence?: number; // 색상 추출 신뢰도 (0-1)
 }
 
 /**

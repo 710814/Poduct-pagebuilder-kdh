@@ -427,10 +427,11 @@ const generateImageSlotsForLayout = (
     return existingSlots;
   }
 
-  // 기존 슬롯이 있으면 최대한 재사용
+  // 기존 슬롯이 있으면 그대로 유지 (adjustTemplateSectionsForColors에서 이미 동적 조정됨)
+  // ★ slice 하지 않음 — layoutType은 열 수이지 슬롯 수가 아님
   if (existingSlots && existingSlots.length > 0) {
     if (existingSlots.length >= requiredCount) {
-      return existingSlots.slice(0, requiredCount);
+      return existingSlots;
     }
 
     // 개수가 부족한 경우, 있는 건 쓰고 나머지는 새로 생성
@@ -515,17 +516,77 @@ const replaceColorPlaceholders = (
 ): string => {
   if (!prompt || colorOptions.length === 0) return prompt;
 
-  let result = prompt;
+  let tier1_absolute = '';  // Tier 1: 절대적 요구사항 (최상단)
+  let tier2_standard = '';  // Tier 2: 표준화 요소 (조명)
+  let result = prompt;       // Tier 3: 창의적 요소 (기존 프롬프트)
 
-  // 플레이스홀더 방식: {{COLOR_1}}, {{COLOR_2}} 등
-  colorOptions.forEach((color, idx) => {
+  // ★ Step 1: 프롬프트에서 실제 사용된 {{COLOR_N}} 인덱스를 먼저 감지
+  const usedColorIndices: Set<number> = new Set();
+  colorOptions.forEach((_, idx) => {
     const placeholder = `{{COLOR_${idx + 1}}}`;
-    // ★ HEX 코드가 있으면 함께 포함하여 AI의 컬러 정확도 향상
-    const hexInfo = color.hexCode ? ` (exact color code: ${color.hexCode})` : '';
-    result = result.replace(new RegExp(placeholder, 'gi'), `${color.colorName}${hexInfo}`);
+    if (result.includes(placeholder) || result.toLowerCase().includes(placeholder.toLowerCase())) {
+      usedColorIndices.add(idx);
+    }
   });
 
-  return result;
+  console.log(`[replaceColorPlaceholders] 프롬프트에 사용된 색상 인덱스: [${[...usedColorIndices].map(i => i + 1).join(', ')}] (전체 ${colorOptions.length}개 중)`);
+
+  // ★ Step 2: 플레이스홀더 치환 + 사용된 색상만 Tier 1/Tier 2 블록 생성
+  colorOptions.forEach((color, idx) => {
+    const placeholder = `{{COLOR_${idx + 1}}}`;
+
+    if (!color.hexCode) {
+      console.warn(
+        `[geminiService] 색상 "${color.colorName}"에 HEX 코드가 없습니다. ` +
+        `AI 색상 정확도가 떨어질 수 있습니다. 상품 이미지에서 자동 색상 추출을 권장합니다.`
+      );
+      result = result.replace(new RegExp(placeholder, 'gi'), color.colorName);
+      return;
+    }
+
+    // ★ Tier 1/Tier 2 블록은 이 슬롯 프롬프트에 실제 사용된 색상만 생성
+    if (usedColorIndices.has(idx)) {
+      // ★ Tier 1: 절대적 색상 요구사항 (프롬프트 최상단에 배치)
+      tier1_absolute += `
+## 🔴 ABSOLUTE COLOR & PRODUCT REQUIREMENT - HIGHEST PRIORITY:
+
+COLOR FIDELITY: The garment MUST be EXACTLY ${color.hexCode} (${color.colorName}).
+- Reference image shows this EXACT color - replicate it pixel-perfectly
+- This HEX code is MANDATORY, not a creative suggestion
+- Color accuracy OVERRIDES lighting aesthetics, pose creativity, or any other consideration
+
+PRODUCT CONSISTENCY: Match the reference image's design, texture, and details exactly.
+- Same fabric appearance and material texture
+- Identical stitching, buttons, zippers, seams, patterns
+- Preserve ALL visual characteristics from the reference
+
+`;
+
+      // ★ Tier 2: 표준화 요소 (조명만 중립화하여 색상 보호)
+      tier2_standard = `
+## 🟡 STANDARDIZED LIGHTING - FOR TRUE COLOR REPRODUCTION:
+
+Lighting Setup: NEUTRAL-WHITE diffused studio lighting (5500K color temperature)
+- Purpose: Prevent color cast and ensure the garment appears in its true ${color.hexCode} shade
+- DO NOT use warm/golden/cool lighting that would shift the garment color
+- Even, soft illumination without harsh shadows on the garment surface
+- Background lighting can vary for mood, but garment lighting must remain neutral
+
+`;
+    }
+
+    // ★ Tier 3: 플레이스홀더 치환은 모든 색상에 대해 수행 (참조 텍스트용)
+    const colorRef = `${color.colorName}`;
+    result = result.replace(new RegExp(placeholder, 'gi'), colorRef);
+  });
+
+  // Tier 1/Tier 2가 비어있으면 (플레이스홀더가 없는 프롬프트) 원본만 반환
+  if (!tier1_absolute && !tier2_standard) {
+    return result;
+  }
+
+  // ★ 최종 조합: Tier 1 (절대적) → Tier 2 (표준화) → Tier 3 (창의적) 순서
+  return tier1_absolute + tier2_standard + '\n## 🟢 CREATIVE ELEMENTS - MAXIMIZE VARIETY:\n\n' + result;
 };
 
 /**
@@ -597,7 +658,9 @@ const buildModelAppearanceDescription = (
 const buildModelCutStyleDirective = (
   modelSettings?: import('../types').ModelSettings
 ): string => {
-  if (!modelSettings?.modelCutStyle) return '';
+  // ★ undefined나 빈 문자열이면 기본값 'face_anonymous' 적용 (방어 로직)
+  const effectiveStyle = modelSettings?.modelCutStyle || 'face_anonymous';
+  console.log('[buildModelCutStyleDirective] effectiveStyle:', effectiveStyle, '(원본:', modelSettings?.modelCutStyle, ')');
 
   const cutStyleDirectiveMap: Record<string, string> = {
     'face_visible': `## ⚠️ FACE VISIBILITY OVERRIDE (CRITICAL - OVERRIDES ALL FACE CROPPING INSTRUCTIONS):
@@ -630,7 +693,7 @@ This photo MUST look like a casual SELFIE taken by the person themselves, NOT a 
 - IMPORTANT: Ignore any conflicting framing instructions like "WAIST-UP shot" or "UPPER BODY CLOSE-UP" — the selfie angle takes priority`
   };
 
-  return cutStyleDirectiveMap[modelSettings.modelCutStyle] || '';
+  return cutStyleDirectiveMap[effectiveStyle] || cutStyleDirectiveMap['face_anonymous'];
 };
 
 /**
@@ -646,16 +709,16 @@ const buildModelDescription = (
   const appearance = buildModelAppearanceDescription(modelSettings);
 
   // 모델컷 스타일은 간략한 인라인 형태로 포함 (기존 호환성)
+  // ★ undefined나 빈 문자열이면 기본값 'face_anonymous' 적용
   const cutStyleParts: string[] = [];
-  if (modelSettings.modelCutStyle) {
-    const cutStyleMap: Record<string, string> = {
-      'face_visible': 'FULL FACE VISIBLE with clear facial features, natural expression',
-      'face_anonymous': 'Face CROPPED at NOSE level, NO eyes visible',
-      'mirror_selfie': 'Casual SELFIE ANGLE as if taken by model, slightly elevated arm-length camera angle, natural relaxed pose'
-    };
-    if (cutStyleMap[modelSettings.modelCutStyle]) {
-      cutStyleParts.push(cutStyleMap[modelSettings.modelCutStyle]);
-    }
+  const effectiveCutStyle = modelSettings.modelCutStyle || 'face_anonymous';
+  const cutStyleMap: Record<string, string> = {
+    'face_visible': 'FULL FACE VISIBLE with clear facial features, natural expression',
+    'face_anonymous': 'Face CROPPED at NOSE level, NO eyes visible',
+    'mirror_selfie': 'Casual SELFIE ANGLE as if taken by model, slightly elevated arm-length camera angle, natural relaxed pose'
+  };
+  if (cutStyleMap[effectiveCutStyle]) {
+    cutStyleParts.push(cutStyleMap[effectiveCutStyle]);
   }
 
   const allParts = [appearance, ...cutStyleParts].filter(p => p.length > 0);
@@ -711,16 +774,14 @@ const adjustTemplateSectionsForColors = (
         colorSection.imageSlots = existingSlots;
       }
 
-      // layoutType도 컬러 수에 따라 자동 조정
+      // ★ layoutType도 컬러 수에 따라 동적 조정
+      // 1개: 전체폭, 2개/4개: 2열(2×2), 3개/5개/6개: 3열(자동 줄넘김)
       if (colorCount === 1) {
         colorSection.layoutType = 'full-width';
-      } else if (colorCount === 2) {
-        colorSection.layoutType = 'grid-2';
-      } else if (colorCount === 3) {
-        colorSection.layoutType = 'grid-3';
+      } else if (colorCount === 2 || colorCount === 4) {
+        colorSection.layoutType = 'grid-2';  // 2열: 2개=1×2, 4개=2×2
       } else {
-        // 4개 이상: grid-1(유동 그리드)로 설정하여 기존 슬롯 전체 유지
-        colorSection.layoutType = 'grid-1';
+        colorSection.layoutType = 'grid-3';  // 3열: 3개=1×3, 5개=3+2, 6개=3+3
       }
 
       console.log(`[adjustTemplateSectionsForColors] 색상 안내 슬롯 조정: ${existingSlots.length} → ${colorSection.imageSlots.length}, layout: ${colorSection.layoutType}`);
@@ -2312,8 +2373,8 @@ High quality, hyperrealistic, ultra photorealistic, shot on Canon EOS R5 with 85
         model: MODEL_IMAGE_GEN,
         contents: { parts },
         config: {
-          temperature: 0.4,  // 낮을수록 프롬프트 지시 정확도 향상
-          topK: 32
+          temperature: 0.25,  // ★ 0.3→0.25: 색상 일관성과 포즈 다양성의 최적 균형점
+          topK: 20            // ★ 32→20: 적절한 선택지 범위로 일관성 향상
         },
         safetySettings: imageGenSafetySettings
       });

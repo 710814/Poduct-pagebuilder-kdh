@@ -153,11 +153,24 @@ export const StepAnalysis: React.FC<Props> = React.memo(({ analysis, onUpdate, o
             const colorOptionImage = matchedColorOption?.images?.[0];
 
             // ★ 3번째 슬롯 + 후면 이미지가 있으면 후면 이미지를 참조로 우선 사용
-            const backImage = matchedColorOption?.images?.find(img => img.role === 'back')
-              || uploadedFiles.find(img => img.role === 'back');
-            const refImage = (i === 2 && backImage) ? backImage : (colorOptionImage || primaryFile);
+            // 후면 슬롯 감지 (프롬프트 기반)
+            const isBackViewSlot = slotPrompt.includes('BACK VIEW') || slotPrompt.includes('back design');
 
-            console.log(`[StepAnalysis Preview] 슬롯 ${i + 1}: 컬러 매칭 = ${matchedColorOption?.colorName || 'N/A'}, 참조 이미지 = ${refImage?.base64 ? 'O' : 'X'}`);
+            // 후면 참조 이미지 탐색: 해당 컬러옵션 -> 모든 컬러옵션 -> 메인 이미지 (uploadedFiles) 순서로 fallback
+            let backImage = matchedColorOption?.images?.find(img => img.role === 'back');
+            if (!backImage) {
+              // 해당 컬러에 후면이 없으면, 다른 컬러옵션에서 후면 이미지 탐색 (사용자 요구사항: 한 컬러만 있어도 모든 컬러 적용)
+              backImage = productInputData?.colorOptions
+                ?.flatMap(c => c.images)?.find(img => img.role === 'back');
+            }
+            if (!backImage) {
+              // 컬러옵션 전체에도 없으면 메인 이미지에서 탐색
+              backImage = uploadedFiles.find(img => img.role === 'back');
+            }
+
+            const refImage = (isBackViewSlot && backImage) ? backImage : (colorOptionImage || primaryFile);
+
+            console.log(`[StepAnalysis Preview] 슬롯 ${i + 1}: 컬러 매칭 = ${matchedColorOption?.colorName || 'N/A'}, 후면슬롯여부 = ${isBackViewSlot}, 참조 이미지 = ${refImage?.base64 ? 'O' : 'X'}`);
 
             const imageUrl = await generateSectionImage(
               slotPrompt,
@@ -189,9 +202,21 @@ export const StepAnalysis: React.FC<Props> = React.memo(({ analysis, onUpdate, o
         // ★ 프롬프트에서 컬러명을 추출하여 해당 컬러옵션 이미지를 참조
         const matchedColorOption = findMatchingColorOption(prompt, productInputData?.colorOptions);
         const colorOptionImage = matchedColorOption?.images?.[0];
-        const refImage = colorOptionImage || primaryFile;
 
-        console.log(`[StepAnalysis Preview] 개별 슬롯 ${slotIndex + 1}: 컬러 매칭 = ${matchedColorOption?.colorName || 'N/A'}`);
+        // ★ 개별 슬롯 생성 시에도 후면 이미지 참조 로직 적용
+        const isBackViewSlot = prompt.includes('BACK VIEW') || prompt.includes('back design');
+        let backImage = matchedColorOption?.images?.find(img => img.role === 'back');
+        if (!backImage) {
+          backImage = productInputData?.colorOptions
+            ?.flatMap(c => c.images)?.find(img => img.role === 'back');
+        }
+        if (!backImage) {
+          backImage = uploadedFiles.find(img => img.role === 'back');
+        }
+
+        const refImage = (isBackViewSlot && backImage) ? backImage : (colorOptionImage || primaryFile);
+
+        console.log(`[StepAnalysis Preview] 개별 슬롯 ${slotIndex + 1}: 컬러 매칭 = ${matchedColorOption?.colorName || 'N/A'}, 후면슬롯여부 = ${isBackViewSlot}`);
 
         const imageUrl = await generateSectionImage(
           prompt,

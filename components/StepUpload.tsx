@@ -7,6 +7,7 @@ import {
 import { AppMode, UploadedFile, Template, ColorOption, ProductInputData, ModelSettings } from '../types';
 import { getTemplates, getDefaultTemplateId } from '../services/templateService';
 import { optimizeImages, needsOptimization, optimizeImage } from '../utils/imageOptimizer';
+import { extractColorFromImages } from '../utils/colorExtractor';
 import { useToastContext } from '../contexts/ToastContext';
 
 interface Props {
@@ -66,7 +67,7 @@ export const StepUpload: React.FC<Props> = ({ mode, onProductSubmit }) => {
   const [modelGender, setModelGender] = useState<ModelSettings['gender']>('any');
   const [modelHairStyle, setModelHairStyle] = useState('');
   const [modelMood, setModelMood] = useState<ModelSettings['mood']>(undefined);
-  const [modelCutStyle, setModelCutStyle] = useState<ModelSettings['modelCutStyle']>(undefined);
+  const [modelCutStyle, setModelCutStyle] = useState<ModelSettings['modelCutStyle']>('face_anonymous');
 
   useEffect(() => {
     setTemplates(getTemplates());
@@ -133,13 +134,46 @@ export const StepUpload: React.FC<Props> = ({ mode, onProductSubmit }) => {
       }));
 
       if (targetColorId) {
-        // 특정 컬러 옵션에 이미지 추가
-        setColorOptions(prev => prev.map(opt =>
-          opt.id === targetColorId
-            ? { ...opt, images: [...opt.images, ...newUploadedFiles] }
-            : opt
-        ));
-        toast.success(`${newUploadedFiles.length}개 이미지가 추가되었습니다.`);
+        // 특정 컬러 옵션에 이미지 추가 + 색상 자동 추출
+        try {
+          const extractedColor = await extractColorFromImages(optimizedFiles);
+
+          setColorOptions(prev => prev.map(opt => {
+            if (opt.id === targetColorId) {
+              return {
+                ...opt,
+                // hexCode가 없으면 자동 추출된 값으로 설정
+                hexCode: opt.hexCode || extractedColor.hexCode,
+                images: [...opt.images, ...newUploadedFiles],
+                autoExtractedHex: extractedColor.hexCode,
+                extractionConfidence: extractedColor.confidence
+              };
+            }
+            return opt;
+          }));
+
+          // 신뢰도가 낮으면 사용자에게 알림
+          if (extractedColor.confidence < 0.5) {
+            toast.warning(
+              `이미지 색상 추출 완료 (${extractedColor.hexCode})\n신뢰도가 낮습니다. 수동으로 조정해주세요.`,
+              5000
+            );
+          } else {
+            toast.success(
+              `${newUploadedFiles.length}개 이미지 추가 완료 (색상: ${extractedColor.hexCode})`,
+              3000
+            );
+          }
+        } catch (colorError) {
+          // 색상 추출 실패 시에도 이미지는 추가
+          console.error('[StepUpload] 색상 추출 실패:', colorError);
+          setColorOptions(prev => prev.map(opt =>
+            opt.id === targetColorId
+              ? { ...opt, images: [...opt.images, ...newUploadedFiles] }
+              : opt
+          ));
+          toast.success(`${newUploadedFiles.length}개 이미지가 추가되었습니다.`);
+        }
       } else {
         // 메인 이미지에 추가
         setMainImages(prev => [...prev, ...newUploadedFiles]);
@@ -740,13 +774,44 @@ export const StepUpload: React.FC<Props> = ({ mode, onProductSubmit }) => {
                   {colorOptions.map((opt) => (
                     <div key={opt.id} className="border border-gray-200 rounded-xl p-3 bg-gray-50">
                       <div className="flex items-center justify-between mb-2">
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 flex-1">
                           <div
-                            className="w-5 h-5 rounded-full border border-gray-300"
+                            className="w-5 h-5 rounded-full border border-gray-300 flex-shrink-0"
                             style={{ backgroundColor: opt.hexCode || '#ccc' }}
                           />
                           <span className="font-medium text-sm text-gray-800">{opt.colorName}</span>
                           <span className="text-xs text-gray-400">({opt.images.length}장)</span>
+
+                          {/* Color Picker */}
+                          <div className="flex items-center gap-1.5 ml-2">
+                            <input
+                              type="color"
+                              value={opt.hexCode || '#808080'}
+                              onChange={(e) => {
+                                setColorOptions(prev => prev.map(o =>
+                                  o.id === opt.id ? { ...o, hexCode: e.target.value.toUpperCase() } : o
+                                ));
+                              }}
+                              className="w-7 h-7 cursor-pointer rounded border border-gray-300"
+                              title="색상 선택"
+                            />
+                            <span className="text-[10px] text-gray-500 font-mono tracking-tight">
+                              {opt.hexCode || '없음'}
+                            </span>
+                            {opt.extractionConfidence !== undefined && (
+                              <span
+                                className={`text-[9px] px-1 py-0.5 rounded ${opt.extractionConfidence >= 0.7
+                                    ? 'bg-green-100 text-green-700'
+                                    : opt.extractionConfidence >= 0.5
+                                      ? 'bg-yellow-100 text-yellow-700'
+                                      : 'bg-red-100 text-red-700'
+                                  }`}
+                                title={`추출 신뢰도: ${(opt.extractionConfidence * 100).toFixed(0)}%`}
+                              >
+                                {(opt.extractionConfidence * 100).toFixed(0)}%
+                              </span>
+                            )}
+                          </div>
                         </div>
                         <div className="flex gap-1">
                           <button
@@ -833,13 +898,12 @@ export const StepUpload: React.FC<Props> = ({ mode, onProductSubmit }) => {
                   <div>
                     <label className="block text-[10px] text-gray-400 mb-1">모델컷 스타일</label>
                     <select
-                      value={modelCutStyle || ''}
-                      onChange={(e) => setModelCutStyle(e.target.value as ModelSettings['modelCutStyle'] || undefined)}
+                      value={modelCutStyle || 'face_anonymous'}
+                      onChange={(e) => setModelCutStyle(e.target.value as ModelSettings['modelCutStyle'] || 'face_anonymous')}
                       className="w-full border border-gray-300 rounded-lg p-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white"
                     >
-                      <option value="">기본 (얼굴 비노출)</option>
+                      <option value="face_anonymous">기본 (얼굴 비노출)</option>
                       <option value="face_visible">얼굴 노출</option>
-                      <option value="face_anonymous">얼굴 비노출 (코/입 아래)</option>
                       <option value="mirror_selfie">거울 셀카</option>
                     </select>
                   </div>

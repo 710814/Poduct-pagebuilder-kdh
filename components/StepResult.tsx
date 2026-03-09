@@ -68,6 +68,7 @@ export const StepResult: React.FC<Props> = ({ data, onRestart, onGoBack, mode, u
 
         ${data.sections.map(section => {
       const isCollage = section.layoutType?.startsWith('collage-');
+      const isMaterialDetail = section.sectionType === 'material_detail';
       const isGrid = (section.layoutType === 'grid-1' || section.layoutType === 'grid-2' || section.layoutType === 'grid-3') && section.imageSlots && section.imageSlots.length > 0;
       const gridCols = section.layoutType === 'grid-3' ? 3 : section.layoutType === 'grid-2' ? 2 : 1;
 
@@ -80,6 +81,18 @@ export const StepResult: React.FC<Props> = ({ data, onRestart, onGoBack, mode, u
                 <h2>${section.title}</h2>
                 <p>${section.content}</p>
                 <div style="overflow: hidden; border-radius: 8px; margin-bottom: 30px; display: flex; align-items: center; justify-content: center; background: #f5f5f5;"><div style="${cropStyle}"><img src="images/section_${section.id}.png" alt="${section.title}" style="max-width: 100%; height: auto; object-fit: contain;" /></div></div>
+            </section>
+            `;
+      }
+
+      // ★ 소재상세 섹션 전용 렌더링 (원형 이미지 + 축소 크기)
+      if (isMaterialDetail) {
+        return `
+            <section class="section" style="background: #f8f6f3; padding: 60px 20px; text-align: center;">
+                <h2 style="font-size: 1.2rem; letter-spacing: 3px; color: #8c7e6f; font-weight: 400; margin-bottom: 30px;">${section.title}</h2>
+                ${section.imageUrl ? `<div style="width: 280px; height: 280px; margin: 0 auto 20px; border-radius: 50%; overflow: hidden; display: flex; align-items: center; justify-content: center; background: #eee;"><img src="images/section_${section.id}.png" alt="${section.title}" style="width: 100%; height: 100%; object-fit: cover;" /></div>` : ''}
+                <div style="margin: 15px auto 0; font-size: 0.6rem; color: #aaa;">●</div>
+                <p style="margin-top: 20px; font-size: 1rem; color: #555; max-width: 500px; margin-left: auto; margin-right: auto; white-space: pre-wrap;">${section.content}</p>
             </section>
             `;
       }
@@ -245,6 +258,7 @@ export const StepResult: React.FC<Props> = ({ data, onRestart, onGoBack, mode, u
         ${data.sections.map((section, index) => {
       const layoutType = section.layoutType || 'full-width';
       const isCollageLayout = layoutType.startsWith('collage-');
+      const isMaterialDetail = section.sectionType === 'material_detail';
       const isGridLayout = layoutType === 'grid-1' || layoutType === 'grid-2' || layoutType === 'grid-3';
       const isTextOnly = layoutType === 'text-only';
       const gridCols = layoutType === 'grid-3' ? 3 : layoutType === 'grid-2' ? 2 : 1;
@@ -259,6 +273,17 @@ export const StepResult: React.FC<Props> = ({ data, onRestart, onGoBack, mode, u
             <h2>${section.title}</h2>
             <p>${section.content}</p>
             <div style="overflow: hidden; border-radius: 12px; margin-bottom: 35px; display: flex; align-items: center; justify-content: center; background: #f5f5f5;"><div style="${cropStyle}"><img src="${section.imageUrl}" alt="${section.title}" style="max-width: 100%; height: auto; object-fit: contain;" /></div></div>
+        </section>`;
+      }
+
+      // ★ 소재상세 섹션 전용 렌더링 (미리보기용)
+      if (isMaterialDetail) {
+        return `
+        <section class="section" style="background: #f8f6f3; padding: 60px 20px; text-align: center;">
+            <h2 style="font-size: 1.2rem; letter-spacing: 3px; color: #8c7e6f; font-weight: 400; margin-bottom: 30px;">${section.title}</h2>
+            ${section.imageUrl ? `<div style="width: 280px; height: 280px; margin: 0 auto 20px; border-radius: 50%; overflow: hidden; display: flex; align-items: center; justify-content: center; background: #eee;"><img src="${section.imageUrl}" alt="${section.title}" style="width: 100%; height: 100%; object-fit: cover;" /></div>` : ''}
+            <div style="margin: 15px auto 0; font-size: 0.6rem; color: #aaa;">●</div>
+            <p style="margin-top: 20px; font-size: 1rem; color: #555; max-width: 500px; margin-left: auto; margin-right: auto; white-space: pre-wrap;">${section.content}</p>
         </section>`;
       }
 
