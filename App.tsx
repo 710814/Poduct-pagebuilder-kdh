@@ -19,7 +19,7 @@ import {
   restoreSettingsFromDrive,
   applyRestoredSettings
 } from './services/settingsBackupService';
-import { Loader2, Settings } from 'lucide-react';
+import { Loader2, Settings, HelpCircle } from 'lucide-react';
 import { ProgressStepper } from './components/ProgressStepper';
 
 const AppContent: React.FC = () => {
@@ -632,6 +632,16 @@ const AppContent: React.FC = () => {
                 {modeDisplayText}
               </div>
             )}
+            <a
+              href="/guide.html"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="p-2 text-blue-500 hover:text-blue-700 hover:bg-blue-50 rounded-full transition-colors flex items-center gap-1"
+              title="사용자 가이드 (새 탭에서 열기)"
+            >
+              <HelpCircle className="w-5 h-5" />
+              <span className="text-sm font-medium hidden sm:inline-block">가이드</span>
+            </a>
             <button
               onClick={handleOpenSettings}
               className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-full transition-colors"

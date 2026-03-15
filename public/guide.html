@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PageGenie 첫 사용자 가이드</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        body { font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, Roboto, 'Helvetica Neue', 'Segoe UI', 'Apple SD Gothic Neo', 'Noto Sans KR', 'Malgun Gothic', 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', sans-serif; scroll-behavior: smooth; }
+        .gradient-text { background: linear-gradient(to right, #2563eb, #7c3aed); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
+        .step-card { transition: transform 0.2s; }
+        .step-card:hover { transform: translateY(-5px); }
+    </style>
+</head>
+<body class="bg-gray-50 text-gray-800 antialiased selection:bg-blue-200">
+
+    <!-- Header -->
+    <header class="bg-white shadow-sm sticky top-0 z-50">
+        <div class="max-w-6xl mx-auto px-4 py-4 flex justify-between items-center">
+            <div class="flex items-center gap-2">
+                <i class="fa-solid fa-wand-magic-sparkles text-blue-600 text-2xl"></i>
+                <h1 class="text-2xl font-bold font-black tracking-tight text-gray-900">PageGenie <span class="font-light text-gray-500">가이드</span></h1>
+            </div>
+            <nav class="hidden md:flex gap-6 text-sm font-medium text-gray-600">
+                <a href="#setup" class="hover:text-blue-600">초기 설정</a>
+                <a href="#workflow" class="hover:text-blue-600">사용 순서</a>
+                <a href="#save-options" class="hover:text-blue-600">저장 방식</a>
+                <a href="#templates" class="hover:text-blue-600">템플릿 가이드</a>
+            </nav>
+        </div>
+    </header>
+
+    <!-- Hero Section -->
+    <div class="bg-indigo-900 text-white py-20 px-4">
+        <div class="max-w-4xl mx-auto text-center">
+            <h2 class="text-4xl md:text-5xl font-extrabold mb-6 leading-tight">AI 기반 상세페이지 자동 생성기<br/><span class="text-blue-400">PageGenie에 오신 것을 환영합니다!</span></h2>
+            <p class="text-lg md:text-xl text-indigo-200 mb-8 leading-relaxed">
+                PageGenie는 상품 이미지 한 장과 간단한 정보만으로 매력적인 상세페이지를 기획하고, AI(Gemini)를 통해 연출 컷을 자동으로 생성해주는 강력한 툴입니다. 처음 오신 분들을 위해 차근차근 사용법을 안내해 드립니다.
+            </p>
+            <a href="#setup" class="inline-block bg-white text-indigo-900 font-bold px-8 py-3 rounded-full shadow-lg hover:bg-gray-100 transition-colors">시작하기 <i class="fa-solid fa-arrow-down ml-2"></i></a>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <main class="max-w-6xl mx-auto px-4 py-12 space-y-24">
+
+        <!-- 1. 초기 설정 -->
+        <section id="setup" class="scroll-mt-24">
+            <div class="flex items-center gap-3 mb-6">
+                <div class="w-10 h-10 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-xl font-bold"><i class="fa-solid fa-gear"></i></div>
+                <h2 class="text-3xl font-bold text-gray-900">1. 시작하기 전에 (필수 초기 설정)</h2>
+            </div>
+            <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-8">
+                <p class="text-gray-600 mb-6 text-lg">생성된 이미지를 안전하게 구글 드라이브에 저장하고, 데이터를 시트로 관리하려면 가장 먼저 <strong>연동 설정</strong>이 필요합니다.</p>
+                <div class="grid md:grid-cols-2 gap-8 relative">
+                    <div class="bg-gray-50 p-6 rounded-xl border border-gray-200">
+                        <h3 class="text-lg font-bold text-gray-800 mb-3"><i class="fa-solid fa-1 text-blue-500 mr-2"></i>설정 메뉴 들어가기</h3>
+                        <p class="text-gray-600 text-sm leading-relaxed mb-4">
+                            앱 화면의 요소 중 우측 톱니바퀴 아이콘(<i class="fa-solid fa-gear text-gray-500 mx-1"></i>) 버튼을 클릭하여 설정 창을 엽니다. 설정이 비어있을 경우 톱니바퀴에 <span class="text-red-500 font-bold">빨간 점</span>이 표시됩니다.
+                        </p>
+                    </div>
+                    <div class="bg-gray-50 p-6 rounded-xl border border-gray-200">
+                        <h3 class="text-lg font-bold text-gray-800 mb-3"><i class="fa-solid fa-2 text-blue-500 mr-2"></i>연동 정보 입력하기</h3>
+                        <ul class="list-disc list-inside text-gray-600 text-sm space-y-2">
+                            <li><strong>Google Sheet ID:</strong> 연동하고자 하는 구글 시트 URL의 중간에 있는 긴 문자열.</li>
+                            <li><strong>GAS URL:</strong> 배포된 구글 앱스 스크립트(Google Apps Script)의 웹 앱 URL.</li>
+                        </ul>
+                        <p class="mt-4 text-xs text-blue-600 bg-blue-50 p-2 rounded"><i class="fa-solid fa-circle-info mr-1"></i> 이 두 가지를 정확히 입력하고 '저장'을 누르면 클라우드 저장 준비가 끝납니다.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 2. 워크플로우 -->
+        <section id="workflow" class="scroll-mt-24">
+            <div class="flex items-center gap-3 mb-6">
+                <div class="w-10 h-10 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center text-xl font-bold"><i class="fa-solid fa-shoe-prints"></i></div>
+                <h2 class="text-3xl font-bold text-gray-900">2. 상세페이지 제작 4단계 가이드</h2>
+            </div>
+            
+            <div class="grid md:grid-cols-2 xl:grid-cols-4 gap-6">
+                <!-- Step 1 -->
+                <div class="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 step-card relative overflow-hidden">
+                    <div class="absolute top-0 right-0 bg-indigo-500 text-white text-xs font-bold px-3 py-1 rounded-bl-lg">STEP 1</div>
+                    <div class="text-indigo-500 text-3xl mb-4 mt-2"><i class="fa-solid fa-object-group"></i></div>
+                    <h3 class="text-xl font-bold mb-2">모드 선택</h3>
+                    <p class="text-gray-600 text-sm leading-relaxed">원하시는 작업 방식(모드)을 선택합니다. AI를 활용하여 무에서 유를 창조하는 '생성 모드'를 선택하여 다음 단계로 넘어갑니다.</p>
+                </div>
+
+                <!-- Step 2 -->
+                <div class="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 step-card relative overflow-hidden">
+                    <div class="absolute top-0 right-0 bg-indigo-500 text-white text-xs font-bold px-3 py-1 rounded-bl-lg">STEP 2</div>
+                    <div class="text-indigo-500 text-3xl mb-4 mt-2"><i class="fa-solid fa-file-pen"></i></div>
+                    <h3 class="text-xl font-bold mb-2">정보 및 원본 입력</h3>
+                    <p class="text-gray-600 text-sm leading-relaxed">상품의 메인 이미지를 업로드하고, <strong>상품명, 브랜드, 색상 옵션, 사이즈 등</strong>의 상세 스펙과 대중에게 어필할 <strong>소구점</strong> 3가지를 기입합니다. 작성한 내용은 AI가 이미지를 그릴 때 중요한 힌트가 됩니다.</p>
+                </div>
+
+                <!-- Step 3 -->
+                <div class="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 step-card relative overflow-hidden ring-2 ring-indigo-100">
+                    <div class="absolute top-0 right-0 bg-indigo-500 text-white text-xs font-bold px-3 py-1 rounded-bl-lg">STEP 3</div>
+                    <div class="text-indigo-500 text-3xl mb-4 mt-2"><i class="fa-solid fa-wand-magic"></i></div>
+                    <h3 class="text-xl font-bold mb-2">템플릿 & 이미지 생성</h3>
+                    <p class="text-gray-600 text-sm leading-relaxed">제공되는 템플릿(레이아웃)을 선택하면 앱이 각 구역에 들어갈 이미지 프롬프트(명령어)를 자동 설계합니다. 내용을 확인한 후 <strong>"이미지 생성"</strong> 버튼을 누르면 AI가 그림을 그리기 시작합니다.</p>
+                </div>
+
+                <!-- Step 4 -->
+                <div class="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 step-card relative overflow-hidden">
+                    <div class="absolute top-0 right-0 bg-indigo-500 text-white text-xs font-bold px-3 py-1 rounded-bl-lg">STEP 4</div>
+                    <div class="text-indigo-500 text-3xl mb-4 mt-2"><i class="fa-solid fa-floppy-disk"></i></div>
+                    <h3 class="text-xl font-bold mb-2">결과 확인 및 완료</h3>
+                    <p class="text-gray-600 text-sm leading-relaxed">생성 완료된 이미지를 미리보기로 확인합니다. 마음에 든다면 <strong>DB/이미지 저장</strong> 버튼이나 <strong>HTML 다운로드</strong> 버튼을 눌러 작업을 최종 마무리합니다.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- 3. 핵심: 저장 방식의 이해 -->
+        <section id="save-options" class="scroll-mt-24">
+            <div class="bg-gradient-to-br from-green-50 to-blue-50 rounded-3xl p-8 md:p-10 border border-green-100">
+                <div class="flex items-center gap-3 mb-6">
+                    <div class="w-10 h-10 rounded-full bg-green-500 text-white flex items-center justify-center text-xl font-bold"><i class="fa-solid fa-cloud-arrow-up"></i></div>
+                    <h2 class="text-3xl font-bold text-gray-900">3. 이미지 저장 최적화 (가장 중요)</h2>
+                </div>
+                
+                <div class="bg-white rounded-xl p-6 shadow-sm mb-6 border-l-4 border-green-500">
+                    <h3 class="font-bold text-lg text-green-800 mb-2">💡 언제 이미지가 구글 서버에 저장되나요?</h3>
+                    <p class="text-gray-700 leading-relaxed">
+                        3단계에서 단순히 "이미지 생성"을 연속으로 누른다고 해서 <strong>그 즉시 구글 시트나 드라이브에 저장되어 요금이나 용량을 낭비하지 않습니다.</strong> 생성된 이미지는 임시로 사용자의 웹 브라우저 메모리에만 보관됩니다. (미리보기 용도)
+                    </p>
+                    <p class="text-gray-700 leading-relaxed mt-2 font-medium">
+                        오직 모든 생성결과가 마음에 들어 4단계(결과 화면)에 진입한 후, <span class="bg-green-600 text-white px-2 py-1 rounded text-sm mx-1"><i class="fa-solid fa-table mr-1"></i>DB/이미지 저장</span> <strong>버튼을 사용자가 직접 누를 때에만, 단 1회에 걸쳐 일괄적으로 서버에 업로드 및 기록됩니다.</strong>
+                    </p>
+                </div>
+
+                <div class="grid md:grid-cols-2 gap-6">
+                    <div class="bg-white p-6 rounded-xl shadow-sm">
+                        <h4 class="font-bold text-blue-600 mb-3"><i class="fa-solid fa-table-cells mr-2"></i>옵션 A: DB/이미지 저장 버튼</h4>
+                        <ul class="space-y-2 text-sm text-gray-600">
+                            <li><i class="fa-solid fa-check text-green-500 mr-2"></i> 구글 드라이브에 상품명 폴더 자동 체계화</li>
+                            <li><i class="fa-solid fa-check text-green-500 mr-2"></i> 모든 이미지를 해당 폴더로 일괄 업로드</li>
+                            <li><i class="fa-solid fa-check text-green-500 mr-2"></i> 구글 시트의 새 행(Row)에 프롬프트 텍스트 이력 및 이미지 다운로드 링크 기록</li>
+                            <li class="mt-4 text-xs text-gray-500 border-t pt-2">* 팀 협업이나 히스토리 보관 목적으로 가장 강력히 권장됩니다.</li>
+                        </ul>
+                    </div>
+                    <div class="bg-white p-6 rounded-xl shadow-sm">
+                        <h4 class="font-bold text-gray-800 mb-3"><i class="fa-solid fa-file-code mr-2"></i>옵션 B: HTML 다운로드 버튼</h4>
+                        <ul class="space-y-2 text-sm text-gray-600">
+                            <li><i class="fa-solid fa-check text-gray-400 mr-2"></i> 즉시 내 컴퓨터로 압축파일(ZIP) 다운로드</li>
+                            <li><i class="fa-solid fa-check text-gray-400 mr-2"></i> 인터넷이나 구글 연동 없이 로컬 이미지와 HTML을 보유</li>
+                            <li><i class="fa-solid fa-check text-gray-400 mr-2"></i> 쇼핑몰 관리자 페이지에 그대로 복사붙여넣기 할 때 사용</li>
+                            <li class="mt-4 text-xs text-gray-500 border-t pt-2">* 구글 시트 기록이 남지 않으며, 완전한 로컬 단독 저장이 필요할 때 사용합니다.</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 4. 템플릿 사용법 -->
+        <section id="templates" class="scroll-mt-24">
+            <div class="flex items-center gap-3 mb-6">
+                <div class="w-10 h-10 rounded-full bg-purple-100 text-purple-600 flex items-center justify-center text-xl font-bold"><i class="fa-solid fa-layer-group"></i></div>
+                <h2 class="text-3xl font-bold text-gray-900">4. 템플릿(Layout)의 이해</h2>
+            </div>
+            
+            <p class="text-gray-600 mb-8 border-l-4 border-purple-500 pl-4 py-1 bg-purple-50">
+                템플릿은 상세페이지의 '뼈대'입니다. 섹션 단위로 나누어져 있으며, 각 템플릿의 속성에 따라 생성되는 이미지의 갯수와 배열이 달라집니다.
+            </p>
+
+            <div class="grid md:grid-cols-3 gap-6">
+                <div class="border border-gray-200 rounded-xl p-6 bg-white hover:border-purple-300 transition-colors">
+                    <div class="h-32 bg-gray-100 rounded-lg flex items-center justify-center mb-4">
+                        <div class="w-16 h-16 bg-gray-300 rounded"></div>
+                    </div>
+                    <h3 class="font-bold text-lg mb-2">단일 이미지 (Single)</h3>
+                    <p class="text-sm text-gray-600">세로로 길거나 가로로 꽉 찬 하나의 큰 이미지를 생성합니다. 브랜드 인트로보드나 큰 배너 영역에 적합합니다.</p>
+                </div>
+
+                <div class="border border-gray-200 rounded-xl p-6 bg-white hover:border-purple-300 transition-colors">
+                    <div class="h-32 bg-gray-100 rounded-lg flex flex-col items-center justify-center gap-2 p-4 mb-4">
+                        <div class="flex gap-2 w-full">
+                            <div class="flex-1 h-10 bg-gray-300 rounded"></div>
+                            <div class="flex-1 h-10 bg-gray-300 rounded"></div>
+                        </div>
+                        <div class="flex gap-2 w-full">
+                            <div class="flex-1 h-10 bg-gray-300 rounded"></div>
+                            <div class="flex-1 h-10 bg-gray-300 rounded"></div>
+                        </div>
+                    </div>
+                    <h3 class="font-bold text-lg mb-2">그리드 (Grid)</h3>
+                    <p class="text-sm text-gray-600">2칸, 3칸, 4칸 등 동일한 비율의 이미지를 격자 형태로 나열합니다. 컬러칩이나 디테일 컷을 여러 장 보여줄 때 매우 유용합니다.</p>
+                </div>
+
+                <div class="border border-gray-200 rounded-xl p-6 bg-white hover:border-purple-300 transition-colors">
+                    <div class="h-32 bg-gray-100 rounded-lg flex gap-2 p-4 mb-4">
+                        <div class="w-1/3 h-full bg-gray-300 rounded"></div>
+                        <div class="w-2/3 flex flex-col gap-2">
+                            <div class="h-1/2 bg-gray-300 rounded"></div>
+                            <div class="h-1/2 bg-gray-300 rounded"></div>
+                        </div>
+                    </div>
+                    <h3 class="font-bold text-lg mb-2">콜라주 (Collage)</h3>
+                    <p class="text-sm text-gray-600">크고 작은 이미지가 불규칙적으로, 그러나 감각적으로 섞여있는 레이아웃입니다. 라이프스타일 컷과 룩북 분위기를 낼 때 사용합니다.</p>
+                </div>
+            </div>
+
+            <div class="mt-8 bg-gray-800 text-white rounded-xl p-6">
+                <h4 class="font-bold text-lg mb-2"><i class="fa-solid fa-code text-yellow-400 mr-2"></i>기본 템플릿 지정하기</h4>
+                <p class="text-sm text-gray-300 leading-relaxed mb-4">
+                    매번 템플릿을 선택하기 귀찮으신가요? 템플릿 선택 창에 보시면 <strong>[기본값으로 설정]</strong> 버튼이 있습니다. 자주 쓰시는 레이아웃을 등록해두면 다음부터는 자동으로 해당 템플릿이 최상단에 준비됩니다.
+                </p>
+            </div>
+
+            <div class="mt-12">
+                <h3 class="text-2xl font-bold text-gray-900 mb-6 flex items-center gap-2">
+                    <i class="fa-solid fa-pen-to-square text-purple-500 text-xl"></i>
+                    나만의 템플릿 만들기 (고급 설정)
+                </h3>
+                <p class="text-gray-600 mb-6 text-lg leading-relaxed">
+                    제공되는 기본 템플릿 외에도, 사용자가 직접 원하는 구성으로 템플릿을 만들거나 수정할 수 있습니다. 템플릿 편집은 앱 우측 상단 <strong>설정(<i class="fa-solid fa-gear"></i>)</strong> 메뉴의 <strong>[템플릿 설정]</strong> 탭에서 가능합니다.
+                </p>
+                
+                <div class="space-y-8">
+                    <!-- Step 1: Add Template -->
+                    <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 md:p-8 flex flex-col md:flex-row gap-6 items-start">
+                        <div class="w-12 h-12 bg-purple-100 text-purple-600 rounded-full flex items-center justify-center font-bold text-xl flex-shrink-0">1</div>
+                        <div class="flex-1">
+                            <h4 class="text-xl font-bold text-gray-900 mb-3">새 템플릿 추가하기</h4>
+                            <p class="text-gray-600 leading-relaxed mb-4">템플릿 목록 화면에서 언제든 새 템플릿을 추가할 수 있습니다.</p>
+                            <ul class="space-y-3 text-gray-600 bg-gray-50 p-4 rounded-xl border border-gray-100">
+                                <li class="flex items-start gap-2">
+                                    <i class="fa-solid fa-robot text-blue-500 mt-1"></i>
+                                    <div>
+                                        <strong class="text-gray-800">이미지 분석으로 추가 (AI 자동 생성):</strong>
+                                        <p class="text-sm mt-1">참고하고 싶은 타사 상세페이지나 잘 만들어진 이미지를 업로드하세요. AI가 이미지의 레이아웃 구조를 분석하여 템플릿(섹션 갯수, 그리드 등)을 자동으로 생성해 줍니다.</p>
+                                    </div>
+                                </li>
+                                <li class="flex items-start gap-2">
+                                    <i class="fa-solid fa-pen text-gray-500 mt-1"></i>
+                                    <div>
+                                        <strong class="text-gray-800">직접 구성 (빈 템플릿 추가):</strong>
+                                        <p class="text-sm mt-1">"직접 구성" 버튼이나 원하시는 카테고리(뷰티, 패션 등)를 선택하여 처음부터 구조를 짜 올릴 수 있는 빈 템플릿을 엽니다.</p>
+                                    </div>
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+
+                    <!-- Step 2: Configure Sections -->
+                    <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 md:p-8 flex flex-col md:flex-row gap-6 items-start">
+                        <div class="w-12 h-12 bg-purple-100 text-purple-600 rounded-full flex items-center justify-center font-bold text-xl flex-shrink-0">2</div>
+                        <div class="flex-1">
+                            <h4 class="text-xl font-bold text-gray-900 mb-3">섹션(Section) 구성 및 관리</h4>
+                            <p class="text-gray-600 leading-relaxed mb-4">하나의 긴 상세페이지는 여러 개의 <strong>'섹션'</strong> 블록이 아래로 쌓이면서 완성됩니다. 편집 화면 중앙과 우측에서 섹션을 관리합니다.</p>
+                            <ol class="list-decimal list-inside space-y-3 text-gray-600 text-sm bg-gray-50 p-4 rounded-xl border border-gray-100">
+                                <li><strong>섹션 추가:</strong> 템플릿 아래쪽의 <span class="bg-white border px-2 py-1 rounded shadow-sm text-blue-600 font-medium">+ 섹션 추가</span> 버튼을 눌러 새 영역을 만듭니다. 가장 최상위에는 상품의 메인 타이틀을 담당하는 <strong>'Top Title'</strong>을 하나 추가하는 것을 권장합니다.</li>
+                                <li><strong>섹션 이름:</strong> 우측 설정 패널의 <strong>"섹션 이름"</strong> 입력창에서 해당 영역의 역할(예: 메인 배너, 디테일 컷, 소재 설명)을 알아보기 쉽게 적습니다. 이 이름은 결과 화면에 제목으로 표시됩니다.</li>
+                                <li><strong>설명/부제목:</strong> 섹션의 부제목이나 간략한 설명(Description)을 입력하면, 결과 이미지와 함께 텍스트로 보일 수 있습니다. (테마에 따라 표시 방식이 다름)</li>
+                                <li><strong>레이아웃:</strong> 이 섹션의 모양을 결정합니다. "Single(단일 이미지)", "Grid(바둑판 배열)", "Collage(크고 작은 이미지 혼합)" 중 하나를 선택합니다.</li>
+                                <li><strong>섹션 순서 변경 및 삭제:</strong> 중앙 패널의 섹션 블록 우측 상단에 있는 화살표 아이콘(<i class="fa-solid fa-arrow-up mx-1"></i><i class="fa-solid fa-arrow-down mx-1"></i>)으로 위아래 순서를 바꾸거나, 휴지통 아이콘(<i class="fa-solid fa-trash-can mx-1 text-red-400"></i>)으로 삭제할 수 있습니다.</li>
+                            </ol>
+                        </div>
+                    </div>
+
+                    <!-- Step 3: Configure Image Slots -->
+                    <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 md:p-8 flex flex-col md:flex-row gap-6 items-start">
+                        <div class="w-12 h-12 bg-purple-100 text-purple-600 rounded-full flex items-center justify-center font-bold text-xl flex-shrink-0">3</div>
+                        <div class="flex-1">
+                            <h4 class="text-xl font-bold text-gray-900 mb-3">섹션 내 이미지 슬롯(Slot) 설정</h4>
+                            <p class="text-gray-600 leading-relaxed mb-4">섹션의 레이아웃을 정했다면, 그 안에 들어갈 각각의 이미지 영역(슬롯)을 세부적으로 지시해야 합니다. 우측 패널의 <strong>'섹션 내부 이미지 구성'</strong> 영역에서 설정합니다.</p>
+                            
+                            <div class="space-y-4 text-sm text-gray-600">
+                                <div class="bg-green-50 border border-green-100 rounded-xl p-4">
+                                    <strong class="text-green-800 flex items-center gap-2 mb-2"><i class="fa-solid fa-images"></i>자동 프롬프트 vs 고정 프롬프트</strong>
+                                    <ul class="list-disc list-inside space-y-1">
+                                        <li><strong>기본 슬롯 (연필 아이콘 <i class="fa-solid fa-pencil text-gray-400"></i>):</strong> 모델이 앱 프론트에서 소구점을 기반으로 <strong>알아서 동적 영문 프롬프트를 작성</strong>하게 둡니다. (가장 많이 씀) 슬롯 이름만 '디테일 컷', '활용 모습' 등으로 적어주세요.</li>
+                                        <li><strong>고정 프롬프트 (자물쇠 아이콘 <i class="fa-solid fa-lock text-red-500"></i>):</strong> 이 자리에 들어갈 이미지는 <strong>AI가 마음대로 바꾸면 안 될 때</strong> 사용합니다. 자물쇠 아이콘을 눌러 고정 모드로 바꾼 뒤, <em>"A close-up shot of..."</em> 처럼 직접 확정된 영문 프롬프트를 적어넣어 고정시킵니다.</li>
+                                    </ul>
+                                </div>
+                                <div class="bg-blue-50 border border-blue-100 rounded-xl p-4">
+                                    <strong class="text-blue-800 flex items-center gap-2 mb-2"><i class="fa-solid fa-crop-simple"></i>비율 (Aspect Ratio) 선택</strong>
+                                    <p class="mb-2">사진 한 장 한 장의 가로세로 비율을 결정합니다. (예: 1:1, 4:5, 16:9)</p>
+                                    <p class="text-xs text-gray-500"><i class="fa-solid fa-circle-exclamation text-amber-500 mr-1"></i> 주의: Grid나 Collage 레이아웃은 선택하신 비율의 크기에 맞춰 화면 분할 코드를 생성하므로 가급적 일관된 비율을 설정하는 것이 깔끔하게 나옵니다.</p>
+                                </div>
+                                <div class="bg-gray-50 border border-gray-200 rounded-xl p-4 flex justify-between items-center">
+                                    <div>
+                                        <strong class="text-gray-800">슬롯 추가/삭제하기</strong>
+                                        <p class="text-gray-500 mt-1">"슬롯 추가(+)" 버튼을 눌러 이 섹션에 포함할 이미지 수를 늘리거나 뺄 수 있습니다. 원하는 이미지 만큼만 딱 맞춰 구성하세요.</p>
+                                    </div>
+                                    <button class="bg-white border text-xs px-3 py-1.5 rounded text-gray-600 whitespace-nowrap"><i class="fa-solid fa-plus mr-1"></i>슬롯 추가</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="text-center p-4">
+                        <p class="text-purple-600 font-bold bg-purple-50 inline-block px-6 py-3 rounded-full border border-purple-100">
+                            모든 수정이 끝났다면 가장 우측 상단의 <strong><i class="fa-solid fa-check mr-2"></i>수정 완료</strong> 버튼을 눌러 저장하는 것을 잊지 마세요!
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 5. FAQ -->
+        <section id="faq" class="mb-12">
+            <h2 class="text-2xl font-bold text-gray-900 mb-6"><i class="fa-solid fa-circle-question text-blue-500 mr-2"></i>자주 묻는 질문</h2>
+            <div class="space-y-4">
+                <details class="bg-white border border-gray-200 rounded-lg p-4 cursor-pointer group">
+                    <summary class="font-bold text-gray-800 group-hover:text-blue-600 transition-colors list-none flex justify-between">
+                        Q. 수십 장을 한번에 만들다 보니 완료가 너무 오래 걸려요.
+                        <i class="fa-solid fa-chevron-down text-gray-400 group-open:rotate-180 transition-transform"></i>
+                    </summary>
+                    <p class="text-gray-600 mt-4 text-sm leading-relaxed border-t pt-4">
+                        A. 구글 최신 AI 모델을 사용하므로 다량의 고화질 이미지 렌더링 시 대기 시간이 발생합니다. 렌더링 도중 창을 닫거나 새로고침하지 마시고 잠시 대기해주세요. 진행바(Progress bar)를 통해 상황을 모니터링할 수 있습니다.
+                    </p>
+                </details>
+                <details class="bg-white border border-gray-200 rounded-lg p-4 cursor-pointer group">
+                    <summary class="font-bold text-gray-800 group-hover:text-blue-600 transition-colors list-none flex justify-between">
+                        Q. DB 저장 중 "전송 용량이 너무 큼" (텍스트만 저장) 오류가 떴어요.
+                        <i class="fa-solid fa-chevron-down text-gray-400 group-open:rotate-180 transition-transform"></i>
+                    </summary>
+                    <p class="text-gray-600 mt-4 text-sm leading-relaxed border-t pt-4">
+                        A. 구글 서버(GAS)는 한번에 보낼 수 있는 최대 데이터 한계(약 50MB)가 존재합니다. 고해상도 이미지가 너무 많을 경우 발생하는 안전 장치입니다. 이 경우 해당 DB 기록에는 이미지 파일이 누락되었을 수 있으므로 <strong>[HTML 다운로드]를 통해 로컬에 원본을 보관하는 것을 권장</strong>합니다.
+                    </p>
+                </details>
+                <details class="bg-white border border-gray-200 rounded-lg p-4 cursor-pointer group">
+                    <summary class="font-bold text-gray-800 group-hover:text-blue-600 transition-colors list-none flex justify-between">
+                        Q. 생성된 모델/상품 이미지의 색상이 약간 다르게 나와요.
+                        <i class="fa-solid fa-chevron-down text-gray-400 group-open:rotate-180 transition-transform"></i>
+                    </summary>
+                    <p class="text-gray-600 mt-4 text-sm leading-relaxed border-t pt-4">
+                        A. AI는 텍스트(프롬프트)와 제공된 원본 이미지를 혼합하여 연출컷을 재창조합니다. 2단계 정보 입력란에 <strong>색상 옵션을 명확히 기재</strong>해주시고, 필요시 각 컬러별 "후면/앞면/기타" 이미지를 정확히 매칭해 업로드 하시면 정확도를 훨씬 더 높일 수 있습니다.
+                    </p>
+                </details>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Footer -->
+    <footer class="bg-gray-900 text-gray-400 py-8 text-center mt-12">
+        <div class="flex justify-center items-center gap-2 mb-2">
+            <i class="fa-solid fa-wand-magic-sparkles text-gray-500"></i>
+            <span class="font-bold text-gray-300">PageGenie</span>
+        </div>
+        <p class="text-sm">First User Setup Guide &copy; 2026. All rights reserved.</p>
+    </footer>
+
+</body>
+</html>
