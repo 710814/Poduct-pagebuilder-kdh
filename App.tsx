@@ -265,6 +265,10 @@ const AppContent: React.FC = () => {
         selectedTemplate,
         data  // 상품 정보 전달
       );
+      // 상품기본정보 표시 기본값: OFF
+      if (result.showIntroSection === undefined) {
+        result.showIntroSection = false;
+      }
       setAnalysisResult(result);
     } catch (error) {
       console.error(error);
@@ -346,6 +350,48 @@ const AppContent: React.FC = () => {
           setGenerationProgress(prev => ({
             ...prev,
             completedSectionIds: [...prev.completedSectionIds, section.id]
+          }));
+        }
+        // ★ 히어로 섹션 전용 처리 (멀티슬롯 핸들러 우회 → 단일 이미지 직접 생성)
+        else if (section.sectionType === 'hero' && section.imagePrompt && section.layoutType !== 'text-only') {
+          console.log(`[Generate] ★ 히어로 섹션 "${section.title}": 전용 단일 이미지 생성`);
+
+          setGenerationProgress(prev => ({
+            ...prev,
+            currentSectionId: section.id,
+            currentSectionTitle: `${section.title} (히어로)`
+          }));
+
+          try {
+            let heroPrompt = section.imagePrompt;
+            if (productInputData?.colorOptions) {
+              productInputData.colorOptions.forEach((opt, idx) => {
+                heroPrompt = heroPrompt.replace(new RegExp(`\\{\\{COLOR_${idx + 1}\\}\\}`, 'gi'), opt.colorName);
+              });
+            }
+
+            const imageUrl = await generateSectionImage(
+              heroPrompt,
+              primaryFile?.base64,
+              primaryFile?.mimeType,
+              mode,
+              productInputData?.modelSettings
+            );
+            console.log(`[Generate] ★ 히어로 이미지 생성 성공`);
+            newSections.push({ ...section, imageUrl });
+          } catch (heroError) {
+            console.error(`[Generate] ★ 히어로 이미지 생성 실패:`, heroError);
+            toast.warning('히어로 이미지 생성에 실패했습니다. 결과 페이지에서 재생성할 수 있습니다.');
+            newSections.push(section);
+          }
+
+          completedCount++;
+          setGenerationProgress(prev => ({
+            ...prev,
+            current: completedCount,
+            completedSectionIds: [...prev.completedSectionIds, section.id],
+            currentSectionId: '',
+            currentSectionTitle: ''
           }));
         }
         // ★ 콜라주 레이아웃 처리 (AI가 1장의 콜라주 이미지 생성)

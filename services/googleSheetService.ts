@@ -154,12 +154,12 @@ const generateHTML = (data: ProductAnalysis): string => {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>${data.productName}</title>
-    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Nanum+Brush+Script&family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
     <style>
         body { font-family: 'Noto Sans KR', sans-serif; margin: 0; padding: 0; color: #333; line-height: 1.6; }
-        .container { max-width: 800px; margin: 0 auto; }
+        .container { max-width: 840px; margin: 0 auto; }
         .hero { text-align: center; padding: 60px 20px; background-color: #f9fafb; }
-        .hero h1 { font-size: 2.5rem; margin-bottom: 20px; color: #111; }
+        .hero h1 { font-size: 2.5rem; margin-bottom: 20px; color: #111; font-family: 'Nanum Brush Script', cursive; }
         .hero p { font-size: 1.2rem; color: #555; max-width: 600px; margin: 0 auto; }
         .features { padding: 40px 20px; background: #fff; }
         .features ul { max-width: 600px; margin: 0 auto; padding-left: 20px; }
@@ -174,6 +174,12 @@ const generateHTML = (data: ProductAnalysis): string => {
 <body>
     <div class="container">
         <header class="hero">
+            ${(() => {
+              const heroSection = data.sections.find(s => s.sectionType === 'hero');
+              return heroSection && heroSection.imageUrl
+                ? `<img src="images/section_${heroSection.id}.png" alt="${data.productName}" style="max-width: 100%; height: auto; border-radius: 8px; margin-bottom: 30px;" />`
+                : '';
+            })()}
             <h1>${data.productName}</h1>
             <p>${data.marketingCopy}</p>
         </header>
@@ -184,13 +190,27 @@ const generateHTML = (data: ProductAnalysis): string => {
             </ul>
         </section>
 
-        ${data.sections.map(section => `
+        ${data.sections.filter(s => s.sectionType !== 'hero').map(section => {
+          if (section.sectionType === 'material_detail') {
+            const contentLines = section.content.split('\n');
+            const materialName = contentLines[0] || '';
+            const materialDesc = contentLines.slice(1).join('\n').trim();
+            return `
+        <section class="section" style="background: #f8f6f3; padding: 60px 20px; text-align: center;">
+            <h2 style="font-size: 1.2rem; letter-spacing: 3px; color: #8c7e6f; font-weight: 400; margin-bottom: 30px;">${section.title}</h2>
+            ${section.imageUrl ? `<div style="width: 280px; height: 280px; margin: 0 auto 20px; border-radius: 50%; overflow: hidden; display: flex; align-items: center; justify-content: center; background: #eee;"><img src="images/section_${section.id}.png" alt="${section.title}" style="width: 100%; height: 100%; object-fit: cover;" /></div>` : ''}
+            <div style="margin: 15px auto 0; font-size: 0.6rem; color: #aaa;">●</div>
+            <h3 style="margin-top: 20px; font-size: 1.15rem; font-weight: 700; color: #333;">${materialName}</h3>
+            ${materialDesc ? `<p style="margin-top: 10px; font-size: 1rem; color: #555; max-width: 500px; margin-left: auto; margin-right: auto; white-space: pre-wrap; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;">${materialDesc}</p>` : ''}
+        </section>`;
+          }
+          return `
         <section class="section">
             ${section.imageUrl ? `<img src="images/section_${section.id}.png" alt="${section.title}" />` : ''}
             <h2>${section.title}</h2>
             <p>${section.content}</p>
-        </section>
-        `).join('')}
+        </section>`;
+        }).join('')}
 
         <footer class="footer">
             <p>© ${new Date().getFullYear()} ${data.productName}. All rights reserved.</p>

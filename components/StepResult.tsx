@@ -36,11 +36,12 @@ export const StepResult: React.FC<Props> = ({ data, onRestart, onGoBack, mode, u
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>${data.productName}</title>
+    <link href="https://fonts.googleapis.com/css2?family=Nanum+Brush+Script&family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
     <style>
         body { font-family: 'Noto Sans KR', sans-serif; margin: 0; padding: 0; color: #333; line-height: 1.6; }
-        .container { max-width: 800px; margin: 0 auto; }
+        .container { max-width: 840px; margin: 0 auto; }
         .hero { text-align: center; padding: 60px 20px; background-color: #fff; }
-        .hero h1 { font-size: 2.5rem; margin-bottom: 20px; color: #111; }
+        .hero h1 { font-size: 2.5rem; margin-bottom: 20px; color: #111; font-family: 'Nanum Brush Script', cursive; }
         .hero p { font-size: 1.2rem; color: #555; max-width: 600px; margin: 0 auto; }
         .features { padding: 40px 20px; background: #fff; }
         .features ul { max-width: 600px; margin: 0 auto; padding-left: 20px; }
@@ -53,12 +54,18 @@ export const StepResult: React.FC<Props> = ({ data, onRestart, onGoBack, mode, u
 </head>
 <body>
     <div class="container">
-        ${data.showIntroSection !== false ? `
         <header class="hero">
+            ${(() => {
+              const heroSection = data.sections.find(s => s.sectionType === 'hero');
+              return heroSection && heroSection.imageUrl
+                ? `<img src="images/section_${heroSection.id}.png" alt="${data.productName}" style="max-width: 100%; height: auto; border-radius: 8px; margin-bottom: 30px;" />`
+                : '';
+            })()}
             <h1>${data.productName}</h1>
             <p>${data.marketingCopy}</p>
         </header>
 
+        ${data.showIntroSection !== false ? `
         <section class="features">
             <ul>
                 ${data.mainFeatures.map(f => `<li>${f}</li>`).join('')}
@@ -66,7 +73,7 @@ export const StepResult: React.FC<Props> = ({ data, onRestart, onGoBack, mode, u
         </section>
         ` : ''}
 
-        ${data.sections.map(section => {
+        ${data.sections.filter(s => s.sectionType !== 'hero').map(section => {
       const isCollage = section.layoutType?.startsWith('collage-');
       const isMaterialDetail = section.sectionType === 'material_detail';
       const isGrid = (section.layoutType === 'grid-1' || section.layoutType === 'grid-2' || section.layoutType === 'grid-3') && section.imageSlots && section.imageSlots.length > 0;
@@ -85,14 +92,18 @@ export const StepResult: React.FC<Props> = ({ data, onRestart, onGoBack, mode, u
             `;
       }
 
-      // ★ 소재상세 섹션 전용 렌더링 (원형 이미지 + 축소 크기)
+      // ★ 소재상세 섹션 전용 렌더링 (원형 이미지 + 소재이름/설명 분리)
       if (isMaterialDetail) {
+        const contentLines = section.content.split('\n');
+        const materialName = contentLines[0] || '';
+        const materialDesc = contentLines.slice(1).join('\n').trim();
         return `
             <section class="section" style="background: #f8f6f3; padding: 60px 20px; text-align: center;">
                 <h2 style="font-size: 1.2rem; letter-spacing: 3px; color: #8c7e6f; font-weight: 400; margin-bottom: 30px;">${section.title}</h2>
                 ${section.imageUrl ? `<div style="width: 280px; height: 280px; margin: 0 auto 20px; border-radius: 50%; overflow: hidden; display: flex; align-items: center; justify-content: center; background: #eee;"><img src="images/section_${section.id}.png" alt="${section.title}" style="width: 100%; height: 100%; object-fit: cover;" /></div>` : ''}
                 <div style="margin: 15px auto 0; font-size: 0.6rem; color: #aaa;">●</div>
-                <p style="margin-top: 20px; font-size: 1rem; color: #555; max-width: 500px; margin-left: auto; margin-right: auto; white-space: pre-wrap;">${section.content}</p>
+                <h3 style="margin-top: 20px; font-size: 1.15rem; font-weight: 700; color: #333;">${materialName}</h3>
+                ${materialDesc ? `<p style="margin-top: 10px; font-size: 1rem; color: #555; max-width: 500px; margin-left: auto; margin-right: auto; white-space: pre-wrap; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;">${materialDesc}</p>` : ''}
             </section>
             `;
       }
@@ -124,7 +135,6 @@ export const StepResult: React.FC<Props> = ({ data, onRestart, onGoBack, mode, u
           </section>
           `;
     }).join('')}
-    }).join('')}
     </div>
 </body>
 </html>
@@ -139,28 +149,29 @@ export const StepResult: React.FC<Props> = ({ data, onRestart, onGoBack, mode, u
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>${data.productName} - 미리보기</title>
-    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Nanum+Brush+Script&family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
     <style>
         * { box-sizing: border-box; }
-        body { 
-            font-family: 'Noto Sans KR', sans-serif; 
-            margin: 0; 
-            padding: 0; 
-            color: #333; 
+        body {
+            font-family: 'Noto Sans KR', sans-serif;
+            margin: 0;
+            padding: 0;
+            color: #333;
             line-height: 1.8;
             background: #fff;
         }
-        .container { max-width: 860px; margin: 0 auto; }
-        .hero { 
-            text-align: center; 
-            padding: 80px 30px; 
+        .container { max-width: 840px; margin: 0 auto; }
+        .hero {
+            text-align: center;
+            padding: 80px 30px;
             background: #fff;
             color: #111;
         }
-        .hero h1 { 
-            font-size: 2.8rem; 
-            margin-bottom: 20px; 
+        .hero h1 {
+            font-size: 2.8rem;
+            margin-bottom: 20px;
             font-weight: 700;
+            font-family: 'Nanum Brush Script', cursive;
         }
         .hero p { 
             font-size: 1.3rem; 
@@ -241,12 +252,21 @@ export const StepResult: React.FC<Props> = ({ data, onRestart, onGoBack, mode, u
 <body>
     <div class="preview-badge">🔍 미리보기</div>
     <div class="container">
-        ${data.showIntroSection !== false ? `
         <header class="hero">
+            ${(() => {
+              const heroSection = data.sections.find(s => s.sectionType === 'hero');
+              if (heroSection && heroSection.imageUrl) {
+                const hasCrop = (heroSection.cropZoom && heroSection.cropZoom !== 1) || heroSection.cropPanX || heroSection.cropPanY;
+                const cropStyle = hasCrop ? `transform: scale(${heroSection.cropZoom || 1}) translate(${(heroSection.cropPanX || 0) / (heroSection.cropZoom || 1)}px, ${(heroSection.cropPanY || 0) / (heroSection.cropZoom || 1)}px);` : '';
+                return `<div style="overflow: hidden; border-radius: 12px; margin-bottom: 35px; display: flex; align-items: center; justify-content: center; background: #f5f5f5;"><div style="${cropStyle}"><img src="${heroSection.imageUrl}" alt="${data.productName}" style="max-width: 100%; height: auto; object-fit: contain;" /></div></div>`;
+              }
+              return '';
+            })()}
             <h1>${data.productName}</h1>
             <p>${data.marketingCopy}</p>
         </header>
 
+        ${data.showIntroSection !== false ? `
         <section class="features">
             <h3>✨ 주요 특징</h3>
             <ul>
@@ -255,7 +275,7 @@ export const StepResult: React.FC<Props> = ({ data, onRestart, onGoBack, mode, u
         </section>
         ` : ''}
 
-        ${data.sections.map((section, index) => {
+        ${data.sections.filter(s => s.sectionType !== 'hero').map((section, index) => {
       const layoutType = section.layoutType || 'full-width';
       const isCollageLayout = layoutType.startsWith('collage-');
       const isMaterialDetail = section.sectionType === 'material_detail';
@@ -276,14 +296,18 @@ export const StepResult: React.FC<Props> = ({ data, onRestart, onGoBack, mode, u
         </section>`;
       }
 
-      // ★ 소재상세 섹션 전용 렌더링 (미리보기용)
+      // ★ 소재상세 섹션 전용 렌더링 (미리보기용 - 소재이름/설명 분리)
       if (isMaterialDetail) {
+        const contentLines = section.content.split('\n');
+        const materialName = contentLines[0] || '';
+        const materialDesc = contentLines.slice(1).join('\n').trim();
         return `
         <section class="section" style="background: #f8f6f3; padding: 60px 20px; text-align: center;">
             <h2 style="font-size: 1.2rem; letter-spacing: 3px; color: #8c7e6f; font-weight: 400; margin-bottom: 30px;">${section.title}</h2>
             ${section.imageUrl ? `<div style="width: 280px; height: 280px; margin: 0 auto 20px; border-radius: 50%; overflow: hidden; display: flex; align-items: center; justify-content: center; background: #eee;"><img src="${section.imageUrl}" alt="${section.title}" style="width: 100%; height: 100%; object-fit: cover;" /></div>` : ''}
             <div style="margin: 15px auto 0; font-size: 0.6rem; color: #aaa;">●</div>
-            <p style="margin-top: 20px; font-size: 1rem; color: #555; max-width: 500px; margin-left: auto; margin-right: auto; white-space: pre-wrap;">${section.content}</p>
+            <h3 style="margin-top: 20px; font-size: 1.15rem; font-weight: 700; color: #333;">${materialName}</h3>
+            ${materialDesc ? `<p style="margin-top: 10px; font-size: 1rem; color: #555; max-width: 500px; margin-left: auto; margin-right: auto; white-space: pre-wrap; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;">${materialDesc}</p>` : ''}
         </section>`;
       }
 
@@ -319,8 +343,6 @@ export const StepResult: React.FC<Props> = ({ data, onRestart, onGoBack, mode, u
             ${section.imageUrl ? `<div style="overflow: hidden; border-radius: 12px; margin-bottom: 35px; display: flex; align-items: center; justify-content: center; background: #f5f5f5;"><div style="${cropStyle}"><img src="${section.imageUrl}" alt="${section.title}" style="max-width: 100%; height: auto; object-fit: contain;" /></div></div>` : ''}
         </section>`;
       }
-    }).join('')}
-
     }).join('')}
     </div>
 </body>
@@ -554,7 +576,7 @@ ${data.marketingCopy}
       const htmlWithoutBadge = html.replace('<div class="preview-badge">🔍 미리보기</div>', '');
 
       const iframe = document.createElement('iframe');
-      iframe.style.cssText = 'position:fixed; left:-9999px; top:0; width:860px; border:none;';
+      iframe.style.cssText = 'position:fixed; left:-9999px; top:0; width:840px; border:none;';
       document.body.appendChild(iframe);
 
       // 3. HTML 렌더링
@@ -582,7 +604,7 @@ ${data.marketingCopy}
       // 7. 이미지로 캡처
       const dataUrl = await toPng(container, {
         quality: 1.0,
-        pixelRatio: 2,
+        pixelRatio: 1,
         backgroundColor: '#ffffff',
         cacheBust: true,
         skipFonts: true,  // 외부 폰트(Google Fonts) CORS 오류 방지
@@ -709,38 +731,105 @@ ${data.marketingCopy}
           </div>
           <div className="flex-1 overflow-y-auto custom-scrollbar p-0 bg-white">
             {/* Actual rendered preview */}
-            <div className="max-w-[800px] mx-auto bg-white min-h-full">
-              {/* Hero - 조건부 렌더링 */}
-              {data.showIntroSection !== false && (
-                <>
-                  <div className="text-center py-16 px-6 bg-white">
-                    <h1 className="text-4xl font-bold text-gray-900 mb-6">{data.productName}</h1>
-                    <p className="text-xl text-gray-600 max-w-2xl mx-auto leading-relaxed">{data.marketingCopy}</p>
-                  </div>
+            <div className="max-w-[840px] mx-auto bg-white min-h-full">
+              {/* Hero - 항상 렌더링 (이미지 먼저, 텍스트 아래) */}
+              <div className="text-center py-16 px-6 bg-white">
+                {/* Hero 이미지 먼저 표시 */}
+                {(() => {
+                  const heroSection = data.sections.find(s => s.sectionType === 'hero');
+                  if (heroSection && heroSection.imageUrl) {
+                    const hasCrop = (heroSection.cropZoom && heroSection.cropZoom !== 1) || heroSection.cropPanX || heroSection.cropPanY;
+                    return (
+                      <div className="relative group overflow-hidden rounded-lg bg-gray-100 flex items-center justify-center mb-8">
+                        <div style={hasCrop ? {
+                          transform: `scale(${heroSection.cropZoom || 1}) translate(${(heroSection.cropPanX || 0) / (heroSection.cropZoom || 1)}px, ${(heroSection.cropPanY || 0) / (heroSection.cropZoom || 1)}px)`
+                        } : undefined}>
+                          <img src={heroSection.imageUrl} alt={data.productName} className="max-w-full h-auto object-contain" />
+                        </div>
+                        <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <button
+                            onClick={() => handleOpenRegenModal(heroSection.id, heroSection.imagePrompt)}
+                            disabled={!!regeneratingId}
+                            className="bg-white/90 hover:bg-white text-gray-700 p-2.5 rounded-full shadow-lg border border-gray-200 transition-all hover:scale-105 disabled:opacity-70"
+                            title="히어로 이미지 다시 생성"
+                          >
+                            <RefreshCw className={`w-5 h-5 ${regeneratingId === heroSection.id ? 'animate-spin text-blue-600' : ''}`} />
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  }
+                  if (heroSection && !heroSection.imageUrl) {
+                    return (
+                      <div className="w-full h-64 bg-gray-100 rounded-lg flex flex-col items-center justify-center mb-8 text-gray-400">
+                        <span className="mb-2">히어로 이미지 없음</span>
+                        <button
+                          onClick={() => handleOpenRegenModal(heroSection.id, heroSection.imagePrompt)}
+                          disabled={!!regeneratingId}
+                          className="mt-2 text-sm text-blue-600 hover:text-blue-700 flex items-center font-medium bg-white px-3 py-1.5 rounded-full border shadow-sm"
+                        >
+                          <RefreshCw className={`w-4 h-4 mr-1.5 ${regeneratingId === heroSection.id ? 'animate-spin' : ''}`} />
+                          이미지 생성
+                        </button>
+                      </div>
+                    );
+                  }
+                  return null;
+                })()}
+                <h1 className="text-4xl font-bold text-gray-900 mb-6" style={{ fontFamily: "'Nanum Brush Script', cursive" }}>{data.productName}</h1>
+                <p className="text-xl text-gray-600 max-w-2xl mx-auto leading-relaxed">{data.marketingCopy}</p>
+              </div>
 
-                  {/* Features */}
-                  <div className="py-12 px-6">
-                    <h3 className="text-xl font-bold text-center mb-8 text-gray-900">✨ 주요 특징 (Key Features)</h3>
-                    <ul className="max-w-2xl mx-auto space-y-2">
-                      {data.mainFeatures.map((feat, i) => (
-                        <li key={i} className="flex items-start text-lg text-gray-700 py-2 border-b border-gray-100 last:border-0">
-                          <span className="mr-3 text-blue-600 font-bold">✓</span>
-                          {feat}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                </>
+              {/* Features - showIntroSection이 true일 때만 표시 */}
+              {data.showIntroSection !== false && (
+                <div className="py-12 px-6">
+                  <h3 className="text-xl font-bold text-center mb-8 text-gray-900">✨ 주요 특징 (Key Features)</h3>
+                  <ul className="max-w-2xl mx-auto space-y-2">
+                    {data.mainFeatures.map((feat, i) => (
+                      <li key={i} className="flex items-start text-lg text-gray-700 py-2 border-b border-gray-100 last:border-0">
+                        <span className="mr-3 text-blue-600 font-bold">✓</span>
+                        {feat}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
               )}
 
-              {/* Sections */}
+              {/* Sections (hero는 항상 제외 - header에 이미 표시되므로) */}
               <div className="space-y-0">
-                {data.sections.map((section) => {
+                {data.sections.filter(s => s.sectionType !== 'hero').map((section) => {
                   const layoutType = section.layoutType || 'full-width';
+                  const isMaterialDetail = section.sectionType === 'material_detail';
                   const isGridLayout = layoutType === 'grid-1' || layoutType === 'grid-2' || layoutType === 'grid-3';
                   const isTextOnly = layoutType === 'text-only';
                   const gridCols = layoutType === 'grid-3' ? 3 : layoutType === 'grid-2' ? 2 : 1;
                   const hasMultipleSlots = section.imageSlots && section.imageSlots.length > 1;
+
+                  // ★ 소재상세 섹션 전용 렌더링 (소재이름/설명 분리)
+                  if (isMaterialDetail) {
+                    const contentLines = section.content.split('\n');
+                    const materialName = contentLines[0] || '';
+                    const materialDesc = contentLines.slice(1).join('\n').trim();
+                    return (
+                      <div key={section.id} className="py-16 px-6 border-b border-gray-100 last:border-0" style={{ background: '#f8f6f3' }}>
+                        <div className="max-w-3xl mx-auto text-center">
+                          <h2 className="text-sm tracking-widest mb-8" style={{ color: '#8c7e6f', fontWeight: 400, letterSpacing: '3px' }}>{section.title}</h2>
+                          {section.imageUrl && (
+                            <div className="mx-auto mb-5 rounded-full overflow-hidden flex items-center justify-center" style={{ width: '280px', height: '280px', background: '#eee' }}>
+                              <img src={section.imageUrl} alt={section.title} className="w-full h-full object-cover" />
+                            </div>
+                          )}
+                          <div className="mt-4 text-xs" style={{ color: '#aaa' }}>●</div>
+                          <h3 className="mt-5 text-lg font-bold text-gray-800">{materialName}</h3>
+                          {materialDesc && (
+                            <p className="mt-3 text-base max-w-md mx-auto whitespace-pre-wrap" style={{ color: '#555', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' as const, overflow: 'hidden' }}>
+                              {materialDesc}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  }
 
                   return (
                     <div key={section.id} className="py-16 px-6 border-b border-gray-100 last:border-0 bg-white">

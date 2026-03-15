@@ -1509,7 +1509,16 @@ export const analyzeProductImage = async (
       - Write detailed 'content' in Korean based on the 'content_guideline'
       ${productData?.productFeatures ? `- KEY REQUIREMENT: Incorporate these user-provided features: "${productData.productFeatures}"` : ''}
       ${productData?.colorOptions?.length ? '- Mention available colors in color-related sections' : ''}
-      
+
+      ## SPECIAL: material_detail Section Content Format
+      For sections with sectionType "material_detail":
+      - The 'content' field MUST follow this EXACT 2-line format:
+        Line 1: Material/fabric name ONLY (e.g., "폴리에스터", "캐시미어", "면 혼방")
+        Line 2: Brief description of the material characteristics in Korean (max 2 lines)
+      ${productData?.productFeatures ? `- IMPORTANT: If the user-provided features mention any material/fabric info ("${productData.productFeatures}"), extract and use that material name for Line 1` : '- Analyze the product image to determine the most likely fabric/material name'}
+      - Example content: "캐시미어\\n부드럽고 보온성이 뛰어난 프리미엄 캐시미어 소재로 제작되어 고급스러운 착용감을 선사합니다."
+      - Do NOT write more than 2 lines for the description
+
       ## STEP 3: Create Section-Specific imagePrompts (CRITICAL)
       For each section, create an 'imagePrompt' that:
       1. ALWAYS starts with the EXACT product visual description from Step 1

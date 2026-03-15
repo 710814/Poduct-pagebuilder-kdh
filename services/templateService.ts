@@ -204,38 +204,26 @@ const DIVERSE_POSES = {
  */
 export const FASHION_LOOKBOOK_TEMPLATE: Template = {
   id: 'tpl-fashion-faceless-preset',
-  name: '패션아이템 상세(얼굴익명)',
-  description: '7섹션 구성: 히어로 → 제품설명 → 색상(2열) → 코디1(컬러별 3장) → 코디설명 → 코디2(3장) → 제품정보. 다양한 배경/앵글/포즈.',
+  name: '위드커머스_패션템플릿',
+  description: '히어로 → 색상(2열) → 코디(컬러별 3장) → 라이프스타일 코디(3장) → 제품정보 → 제품소재. 다양한 배경/앵글/포즈.',
   category: 'fashion',
   isBuiltin: true,
   createdAt: 1703836800000,
   sections: [
     // ═══════════════════════════════════════════
-    // 섹션 1: 히어로 이미지 (상품명 레터링 오버레이)
+    // 섹션 1: 히어로 이미지
     // ═══════════════════════════════════════════
     {
       id: 'sec-lookbook-hero',
       title: '히어로 이미지',
-      content: '상품의 대표 이미지입니다. 상품명과 간단한 카피가 레터링됩니다.',
+      content: '상품의 대표 이미지입니다.',
       sectionType: 'hero' as SectionType,
       layoutType: 'full-width' as LayoutType,
-      imagePrompt: `REAL HUMAN MODEL wearing the product, fashion editorial HERO shot, 3/4 BODY shot from chin down showing full neckline and product silhouette, {{MODEL_SETTINGS}}, ${LIFESTYLE_BACKGROUNDS.indoor3}, warm cinematic golden lighting, high-end fashion magazine cover quality with elegant minimal typography overlay space at top for product name, dreamy soft bokeh background, ${PHOTOREALISM_KEYWORDS}, ${NEGATIVE_ELEMENTS}, MUST maintain exact product design from reference, Aspect Ratio 3:4, Vertical Portrait Mode`
+      imagePrompt: `REAL HUMAN MODEL wearing the product, fashion editorial HERO shot, 3/4 BODY shot from chin down showing full neckline and product silhouette, {{MODEL_SETTINGS}}, ${LIFESTYLE_BACKGROUNDS.indoor3}, warm cinematic golden lighting, high-end fashion magazine cover quality, dreamy soft bokeh background, ${PHOTOREALISM_KEYWORDS}, ${NEGATIVE_ELEMENTS}, MUST maintain exact product design from reference, Aspect Ratio 3:4, Vertical Portrait Mode`
     },
 
     // ═══════════════════════════════════════════
-    // 섹션 2: 제품 설명 (텍스트 + 디자인 요소)
-    // ═══════════════════════════════════════════
-    {
-      id: 'sec-lookbook-desc',
-      title: '제품 설명',
-      content: '상품의 무드, 컨셉, 주요 셀링 포인트를 설명합니다.\\n\\n이 상품의 매력 포인트와 추천 스타일링을 간결하게 전달합니다.',
-      sectionType: 'description' as SectionType,
-      layoutType: 'text-only' as LayoutType,
-      imagePrompt: ''
-    },
-
-    // ═══════════════════════════════════════════
-    // 섹션 3: 색상 섹션 (가로 2열 그리드, 상품 중심 컷)
+    // 섹션 2: 색상 섹션 (가로 2열 그리드, 상품 중심 컷)
     // ═══════════════════════════════════════════
     {
       id: 'sec-lookbook-colors',
@@ -300,19 +288,7 @@ export const FASHION_LOOKBOOK_TEMPLATE: Template = {
     },
 
     // ═══════════════════════════════════════════
-    // 섹션 5: 코디 설명 (텍스트)
-    // ═══════════════════════════════════════════
-    {
-      id: 'sec-lookbook-styling-desc',
-      title: '스타일링 가이드',
-      content: '다양한 코디네이션 팁과 스타일링 포인트를 안내합니다.\\n\\n이 상품과 잘 어울리는 하의, 가방, 슈즈 등 추천 조합을 알려드립니다.',
-      sectionType: 'description' as SectionType,
-      layoutType: 'text-only' as LayoutType,
-      imagePrompt: ''
-    },
-
-    // ═══════════════════════════════════════════
-    // 섹션 6: 코디 섹션 2 — 라이프스타일 코디 (세로 3장)
+    // 섹션 5: 코디 섹션 2 — 라이프스타일 코디 (세로 3장)
     // ═══════════════════════════════════════════
     {
       id: 'sec-lookbook-styling2',
@@ -345,8 +321,8 @@ export const FASHION_LOOKBOOK_TEMPLATE: Template = {
     // ═══════════════════════════════════════════
     {
       id: 'sec-lookbook-material',
-      title: 'FABRIC',
-      content: '이 상품의 소재와 원단에 대한 상세한 설명입니다.\n\n상품특징에 입력된 소재 정보를 바탕으로 촉감, 두께감, 착용감 등을 안내합니다.',
+      title: '제품소재',
+      content: '폴리에스터\n부드러운 촉감과 내구성이 좋은 소재로 제작되어 피부에 닿는 느낌이 좋고 활동성이 뛰어납니다.',
       sectionType: 'material_detail' as SectionType,
       layoutType: 'full-width' as LayoutType,
       imagePrompt: `EXTREME CLOSE-UP macro photography of ONLY the product fabric texture and weave pattern — NO HUMAN BODY, NO SKIN, NO PERSON visible at all. Shot with macro lens at f/2.8, shallow depth of field, showing intricate fiber details and material quality. Soft diffused natural lighting from side. The fabric fills entire frame showing realistic textile texture with visible thread patterns and natural surface details. Clean neutral background. Center-focused composition suitable for circular crop. Professional product material photography for e-commerce detail page. ABSOLUTELY NO PERSON OR MODEL. ${PHOTOREALISM_KEYWORDS}, Aspect Ratio 1:1, Square Format`
