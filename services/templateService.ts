@@ -204,7 +204,7 @@ const DIVERSE_POSES = {
  */
 export const FASHION_LOOKBOOK_TEMPLATE: Template = {
   id: 'tpl-fashion-faceless-preset',
-  name: '위드커머스_패션템플릿',
+  name: '위드기프트_패션템플릿(8섹션)',
   description: '히어로 → 색상(2열) → 코디(컬러별 3장) → 라이프스타일 코디(3장) → 제품정보 → 제품소재. 다양한 배경/앵글/포즈.',
   category: 'fashion',
   isBuiltin: true,
