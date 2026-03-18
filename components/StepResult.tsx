@@ -563,23 +563,85 @@ ${data.marketingCopy}
     }
   };
 
+  // Google Fonts CSS를 fetch하여 @font-face를 Base64 인라인화하는 유틸 함수
+  const inlineGoogleFonts = async (fontCssUrl: string): Promise<string> => {
+    try {
+      // 1. Google Fonts CSS를 fetch (woff2 포맷을 받기 위해 User-Agent 지정)
+      const cssResponse = await fetch(fontCssUrl, {
+        headers: {
+          // Chrome UA를 보내야 woff2 포맷의 @font-face를 반환
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+        }
+      });
+
+      if (!cssResponse.ok) {
+        console.warn('[Font Inline] Google Fonts CSS fetch 실패:', cssResponse.status);
+        return '';
+      }
+
+      let cssText = await cssResponse.text();
+
+      // 2. CSS 내의 모든 url() 참조를 찾아 Base64 data URI로 변환
+      const urlRegex = /url\((https?:\/\/[^)]+)\)/g;
+      const urlMatches = [...cssText.matchAll(urlRegex)];
+
+      for (const match of urlMatches) {
+        const fontUrl = match[1];
+        try {
+          const fontResponse = await fetch(fontUrl);
+          if (fontResponse.ok) {
+            const fontBlob = await fontResponse.blob();
+            const base64 = await new Promise<string>((resolve, reject) => {
+              const reader = new FileReader();
+              reader.onloadend = () => resolve(reader.result as string);
+              reader.onerror = reject;
+              reader.readAsDataURL(fontBlob);
+            });
+            cssText = cssText.replace(fontUrl, base64);
+          }
+        } catch (fontErr) {
+          console.warn('[Font Inline] 폰트 파일 fetch 실패:', fontUrl, fontErr);
+        }
+      }
+
+      return cssText;
+    } catch (err) {
+      console.warn('[Font Inline] Google Fonts 인라인화 실패:', err);
+      return '';
+    }
+  };
+
   // 새창 미리보기 HTML을 이미지로 저장
   const handleSavePreviewAsImage = async () => {
     setIsSaving(true);
     setSaveType('image');
 
     try {
-      // 1. HTML 생성
+      // 1. Google Fonts CSS를 미리 인라인화 (CORS 우회)
+      const fontCssUrl = 'https://fonts.googleapis.com/css2?family=Nanum+Brush+Script&family=Noto+Sans+KR:wght@300;400;500;700&display=swap';
+      const inlinedFontCss = await inlineGoogleFonts(fontCssUrl);
+
+      // 2. HTML 생성
       const html = generateHTMLForPreview();
 
-      // 2. 숨겨진 iframe 생성 (미리보기 뱃지 제거한 버전)
-      const htmlWithoutBadge = html.replace('<div class="preview-badge">🔍 미리보기</div>', '');
+      // 3. 숨겨진 iframe 생성 (미리보기 뱃지 제거한 버전)
+      let htmlWithoutBadge = html.replace('<div class="preview-badge">🔍 미리보기</div>', '');
+
+      // 4. 인라인 폰트 CSS를 HTML에 삽입 (기존 <link> 태그 바로 뒤에)
+      if (inlinedFontCss) {
+        const inlineFontStyle = `<style data-inlined-fonts="true">\n${inlinedFontCss}\n</style>`;
+        // 기존 Google Fonts <link> 태그 뒤에 인라인 스타일 삽입
+        htmlWithoutBadge = htmlWithoutBadge.replace(
+          /<link href="https:\/\/fonts\.googleapis\.com[^"]*"[^>]*>/,
+          (match) => `${match}\n${inlineFontStyle}`
+        );
+      }
 
       const iframe = document.createElement('iframe');
       iframe.style.cssText = 'position:fixed; left:-9999px; top:0; width:840px; border:none;';
       document.body.appendChild(iframe);
 
-      // 3. HTML 렌더링
+      // 5. HTML 렌더링
       const iframeDoc = iframe.contentDocument || iframe.contentWindow?.document;
       if (!iframeDoc) {
         throw new Error('iframe document not accessible');
@@ -588,35 +650,53 @@ ${data.marketingCopy}
       iframeDoc.write(htmlWithoutBadge);
       iframeDoc.close();
 
-      // 4. 폰트 및 이미지 로드 대기
-      await new Promise(resolve => setTimeout(resolve, 1500));
+      // 6. 폰트 로드 완료 대기 (document.fonts.ready + fallback timeout)
+      try {
+        const iframeWindow = iframe.contentWindow;
+        if (iframeWindow?.document?.fonts) {
+          await Promise.race([
+            iframeWindow.document.fonts.ready,
+            new Promise(resolve => setTimeout(resolve, 5000)) // 5초 fallback timeout
+          ]);
+          console.log('[Image Save] 폰트 로딩 완료 (fonts.ready)');
+        } else {
+          await new Promise(resolve => setTimeout(resolve, 3000));
+          console.log('[Image Save] fonts API 미지원, 3초 대기 완료');
+        }
+      } catch {
+        await new Promise(resolve => setTimeout(resolve, 3000));
+        console.log('[Image Save] 폰트 대기 중 오류, 3초 fallback 대기 완료');
+      }
 
-      // 5. 컨테이너 요소 찾기
+      // 7. 추가 렌더링 안정화 대기
+      await new Promise(resolve => setTimeout(resolve, 500));
+
+      // 8. 컨테이너 요소 찾기
       const container = iframeDoc.querySelector('.container') as HTMLElement;
       if (!container) {
         throw new Error('Container element not found');
       }
 
-      // 6. iframe 높이를 컨텐츠에 맞게 조정
+      // 9. iframe 높이를 컨텐츠에 맞게 조정
       iframe.style.height = `${container.scrollHeight + 100}px`;
       await new Promise(resolve => setTimeout(resolve, 300));
 
-      // 7. 이미지로 캡처
+      // 10. 이미지로 캡처 (skipFonts: false - 인라인화된 폰트 사용)
       const dataUrl = await toPng(container, {
         quality: 1.0,
         pixelRatio: 1,
         backgroundColor: '#ffffff',
         cacheBust: true,
-        skipFonts: true,  // 외부 폰트(Google Fonts) CORS 오류 방지
+        skipFonts: false,  // 인라인화된 폰트를 포함하여 캡처
       });
 
-      // 8. 다운로드 트리거
+      // 11. 다운로드 트리거
       const link = document.createElement('a');
       link.download = `${data.productName.replace(/\s+/g, '_')}_preview.png`;
       link.href = dataUrl;
       link.click();
 
-      // 9. 정리
+      // 12. 정리
       document.body.removeChild(iframe);
 
       toast.success('미리보기가 이미지로 저장되었습니다.');
