@@ -1265,97 +1265,126 @@ export const StepAnalysis: React.FC<Props> = React.memo(({ analysis, onUpdate, o
                         />
                       </div>
 
-                      {/* 상세 설명 */}
-                      <div>
-                        <label className="text-xs font-semibold text-gray-500 uppercase">상세 설명</label>
-                        <textarea
-                          rows={4}
-                          value={section.content}
-                          onChange={(e) => handleSectionChange(index, 'content', e.target.value)}
-                          className="w-full border border-gray-200 rounded-lg p-3 text-sm text-gray-700 focus:ring-1 focus:ring-blue-500 focus:outline-none mt-1"
-                          placeholder="섹션 내용을 입력하세요"
-                        />
-                      </div>
-
-                      {/* 고정 문구 표시 */}
-                      {section.fixedText && (
-                        <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
-                          <label className="text-xs font-semibold text-amber-700 uppercase flex items-center mb-1">
-                            <Lock className="w-3 h-3 mr-1" />
-                            고정 문구
-                          </label>
-                          <p className="text-sm text-amber-800">{section.fixedText}</p>
-                        </div>
-                      )}
-
-                      {/* 이미지 생성 프롬프트 (좌측 하단) */}
-                      {section.layoutType !== 'text-only' && (
-                        <div className={`bg-gray-50 p-4 rounded-lg border border-dashed border-gray-300 ${section.useFixedImage ? 'opacity-50' : ''}`}>
-                          <div className="flex items-center justify-between mb-2">
-                            <label className="text-xs font-semibold text-indigo-600 uppercase flex items-center">
-                              <Sparkles className="w-3 h-3 mr-1" />
-                              이미지 생성 프롬프트
-                            </label>
-                            {/* AI 추천 버튼 */}
-                            <button
-                              onClick={() => generateAIPrompt(section.id)}
-                              disabled={section.useFixedImage}
-                              className="px-2 py-1 bg-gradient-to-r from-purple-500 to-indigo-500 hover:from-purple-600 hover:to-indigo-600 text-white rounded text-xs font-medium flex items-center gap-1 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
-                              title="상품 정보를 기반으로 프롬프트 자동 생성"
-                            >
-                              <Sparkles className="w-3 h-3" />
-                              AI 추천
-                            </button>
+                      {/* ★ 업로드 전용 섹션: 상세설명/고정문구/프롬프트 숨기고 업로드 UI만 표시 */}
+                      {section.isUploadOnly ? (
+                        <div className="bg-sky-50 p-6 rounded-lg border border-dashed border-sky-300 flex flex-col items-center justify-center text-center">
+                          <div className="w-12 h-12 bg-sky-100 rounded-full flex items-center justify-center mb-3 text-sky-500">
+                            <Upload className="w-6 h-6" />
                           </div>
-                          <p className="text-xs text-gray-500 mb-2">
-                            {section.useFixedImage
-                              ? '⚠️ 고정 이미지를 사용하므로 이 프롬프트는 무시됩니다.'
-                              : '한국어 또는 영어로 이미지 스타일을 설명하세요.'
-                            }
+                          <h4 className="text-sm font-bold text-sky-800 mb-1">사용자 직접 업로드 전용 섹션</h4>
+                          <p className="text-xs text-sky-600 mb-4">
+                            AI 이미지 생성 없이<br />사용자가 직접 이미지를 등록하는 영역입니다.
                           </p>
-                          <textarea
-                            rows={3}
-                            value={section.imagePrompt}
-                            onChange={(e) => handleSectionChange(index, 'imagePrompt', e.target.value)}
-                            disabled={section.useFixedImage}
-                            className={`w-full bg-white border border-gray-200 rounded-lg p-2.5 text-sm text-gray-600 focus:ring-1 focus:ring-indigo-500 focus:outline-none ${section.useFixedImage ? 'cursor-not-allowed' : ''}`}
-                            placeholder="예: 나무 테이블 위의 상품, 미니멀한 배경, 고품질 사진"
-                          />
-                          {/* 버튼 영역 */}
-                          <div className="flex gap-2 mt-3">
-                            <button
-                              onClick={() => handleGeneratePreview(section.id)}
-                              disabled={generatingPreviewId === section.id || !section.imagePrompt || section.useFixedImage}
-                              className="flex-1 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-medium flex items-center justify-center gap-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                            >
-                              {generatingPreviewId === section.id ? (
-                                <>
-                                  <Loader2 className="w-4 h-4 animate-spin" />
-                                  생성 중...
-                                </>
-                              ) : (
-                                <>
-                                  <Sparkles className="w-4 h-4" />
-                                  이미지 생성
-                                </>
-                              )}
-                            </button>
-                            <label className="px-4 py-2 bg-green-100 hover:bg-green-200 text-green-700 rounded-lg text-sm font-medium flex items-center gap-2 cursor-pointer transition-colors">
-                              <Upload className="w-4 h-4" />
-                              업로드
-                              <input
-                                type="file"
-                                accept="image/*"
-                                className="hidden"
-                                onChange={(e) => {
-                                  const file = e.target.files?.[0];
-                                  if (file) handleUploadImage(section.id, file, 0);
-                                  e.target.value = '';
-                                }}
-                              />
-                            </label>
-                          </div>
+                          <label className="px-5 py-2.5 bg-sky-600 hover:bg-sky-700 text-white rounded-lg text-sm font-medium flex items-center gap-2 cursor-pointer transition-colors shadow-sm">
+                            <Upload className="w-4 h-4" />
+                            이미지 파일 선택
+                            <input
+                              type="file"
+                              accept="image/*"
+                              className="hidden"
+                              onChange={(e) => {
+                                const file = e.target.files?.[0];
+                                if (file) handleUploadImage(section.id, file);
+                                e.target.value = '';
+                              }}
+                            />
+                          </label>
                         </div>
+                      ) : (
+                        <>
+                          {/* 상세 설명 */}
+                          <div>
+                            <label className="text-xs font-semibold text-gray-500 uppercase">상세 설명</label>
+                            <textarea
+                              rows={4}
+                              value={section.content}
+                              onChange={(e) => handleSectionChange(index, 'content', e.target.value)}
+                              className="w-full border border-gray-200 rounded-lg p-3 text-sm text-gray-700 focus:ring-1 focus:ring-blue-500 focus:outline-none mt-1"
+                              placeholder="섹션 내용을 입력하세요"
+                            />
+                          </div>
+
+                          {/* 고정 문구 표시 */}
+                          {section.fixedText && (
+                            <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+                              <label className="text-xs font-semibold text-amber-700 uppercase flex items-center mb-1">
+                                <Lock className="w-3 h-3 mr-1" />
+                                고정 문구
+                              </label>
+                              <p className="text-sm text-amber-800">{section.fixedText}</p>
+                            </div>
+                          )}
+
+                          {/* 이미지 생성 프롬프트 (좌측 하단) */}
+                          {section.layoutType !== 'text-only' && (
+                            <div className={`bg-gray-50 p-4 rounded-lg border border-dashed border-gray-300 ${section.useFixedImage ? 'opacity-50' : ''}`}>
+                              <div className="flex items-center justify-between mb-2">
+                                <label className="text-xs font-semibold text-indigo-600 uppercase flex items-center">
+                                  <Sparkles className="w-3 h-3 mr-1" />
+                                  이미지 생성 프롬프트
+                                </label>
+                                {/* AI 추천 버튼 */}
+                                <button
+                                  onClick={() => generateAIPrompt(section.id)}
+                                  disabled={section.useFixedImage}
+                                  className="px-2 py-1 bg-gradient-to-r from-purple-500 to-indigo-500 hover:from-purple-600 hover:to-indigo-600 text-white rounded text-xs font-medium flex items-center gap-1 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
+                                  title="상품 정보를 기반으로 프롬프트 자동 생성"
+                                >
+                                  <Sparkles className="w-3 h-3" />
+                                  AI 추천
+                                </button>
+                              </div>
+                              <p className="text-xs text-gray-500 mb-2">
+                                {section.useFixedImage
+                                  ? '⚠️ 고정 이미지를 사용하므로 이 프롬프트는 무시됩니다.'
+                                  : '한국어 또는 영어로 이미지 스타일을 설명하세요.'
+                                }
+                              </p>
+                              <textarea
+                                rows={3}
+                                value={section.imagePrompt}
+                                onChange={(e) => handleSectionChange(index, 'imagePrompt', e.target.value)}
+                                disabled={section.useFixedImage}
+                                className={`w-full bg-white border border-gray-200 rounded-lg p-2.5 text-sm text-gray-600 focus:ring-1 focus:ring-indigo-500 focus:outline-none ${section.useFixedImage ? 'cursor-not-allowed' : ''}`}
+                                placeholder="예: 나무 테이블 위의 상품, 미니멀한 배경, 고품질 사진"
+                              />
+                              {/* 버튼 영역 */}
+                              <div className="flex gap-2 mt-3">
+                                <button
+                                  onClick={() => handleGeneratePreview(section.id)}
+                                  disabled={generatingPreviewId === section.id || !section.imagePrompt || section.useFixedImage}
+                                  className="flex-1 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-medium flex items-center justify-center gap-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                  {generatingPreviewId === section.id ? (
+                                    <>
+                                      <Loader2 className="w-4 h-4 animate-spin" />
+                                      생성 중...
+                                    </>
+                                  ) : (
+                                    <>
+                                      <Sparkles className="w-4 h-4" />
+                                      이미지 생성
+                                    </>
+                                  )}
+                                </button>
+                                <label className="px-4 py-2 bg-green-100 hover:bg-green-200 text-green-700 rounded-lg text-sm font-medium flex items-center gap-2 cursor-pointer transition-colors">
+                                  <Upload className="w-4 h-4" />
+                                  업로드
+                                  <input
+                                    type="file"
+                                    accept="image/*"
+                                    className="hidden"
+                                    onChange={(e) => {
+                                      const file = e.target.files?.[0];
+                                      if (file) handleUploadImage(section.id, file, 0);
+                                      e.target.value = '';
+                                    }}
+                                  />
+                                </label>
+                              </div>
+                            </div>
+                          )}
+                        </>
                       )}
                     </div>
 
@@ -1590,18 +1619,96 @@ export const StepAnalysis: React.FC<Props> = React.memo(({ analysis, onUpdate, o
                               미리보기 생성 완료 - 마우스를 올려 수정/재생성
                             </p>
                           </div>
+                        ) : section.imageUrl ? (
+                          /* 업로드 전용 모드이거나 프롬프트 없이 직접 업로드한 이미지 미리보기 */
+                          <div className="flex-1 bg-blue-50 border border-blue-200 rounded-xl p-4">
+                            <label className="text-xs font-semibold text-blue-600 uppercase flex items-center mb-3">
+                              <ImageIcon className="w-3 h-3 mr-1" />
+                              사용자 등록 이미지
+                            </label>
+                            <div className="relative group">
+                              <div
+                                className="w-full h-64 bg-white rounded-lg border border-blue-200 cursor-pointer hover:border-blue-400 transition-colors overflow-hidden flex items-center justify-center p-4"
+                                onClick={() => openImageViewModal(
+                                  section.imageUrl!,
+                                  section.title,
+                                  section.id
+                                )}
+                                title="클릭하여 크게 보기"
+                              >
+                                <img
+                                  src={section.imageUrl}
+                                  alt="사용자 등록 이미지"
+                                  className="max-w-full max-h-64 object-contain"
+                                />
+                              </div>
+                              {/* 호버 액션 버튼들 (직접 등록 이미지이므로 생성 관련 버튼 제외) */}
+                              <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg flex items-center justify-center gap-2 pointer-events-none group-hover:pointer-events-auto">
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    openImageViewModal(
+                                      section.imageUrl!,
+                                      section.title,
+                                      section.id
+                                    );
+                                  }}
+                                  className="bg-white text-gray-800 px-3 py-2 rounded-lg text-xs font-medium flex items-center hover:bg-gray-100 transition-colors"
+                                  title="이미지 크게 보기"
+                                >
+                                  <Eye className="w-4 h-4 mr-1" />
+                                  크게보기
+                                </button>
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    // 파일 객체를 직접 제거하도록 처리해야 하지만, 
+                                    // StepAnalysis에서는 handleRemovePreview가 동일하게 초기화 해줍니다.
+                                    handleRemovePreview(section.id);
+                                  }}
+                                  className="bg-red-500 text-white p-2 rounded-lg hover:bg-red-600 transition-colors"
+                                  title="최종 생성시 반영 안됨"
+                                >
+                                  <X className="w-4 h-4" />
+                                </button>
+                              </div>
+                            </div>
+                            <p className="text-xs text-blue-600 flex items-center mt-2">
+                              <Upload className="w-3 h-3 mr-1" />
+                              업로드 완료 - 최종 페이지에 그대로 반영됩니다.
+                            </p>
+                          </div>
                         ) : (
-                          /* 이미지 없는 경우: 플레이스홀더 */
+                          /* 이미지 없는 경우: 플레이스홀더 (프롬프트/업로드 전용 가리지 않음) */
                           <div className="flex-1 bg-white border border-gray-200 rounded-xl p-4">
-                            <div className="w-full h-full bg-gray-50 border-2 border-dashed border-gray-300 rounded-lg flex flex-col items-center justify-center min-h-[260px]">
+                            <div className="w-full h-full bg-gray-50 border-2 border-dashed border-gray-300 rounded-lg flex flex-col items-center justify-center min-h-[260px] relative">
+                               {/* 업로드 전용 섹션일 경우 빈 슬롯 클릭 시 파일 업로드 창 띄우기 */}
+                               {section.isUploadOnly && (
+                                  <input
+                                    type="file"
+                                    accept="image/*"
+                                    className="absolute inset-0 opacity-0 cursor-pointer z-10"
+                                    onChange={(e) => {
+                                      const file = e.target.files?.[0];
+                                      if (file) handleUploadImage(section.id, file);
+                                      e.target.value = '';
+                                    }}
+                                  />
+                               )}
                               <div className="w-16 h-16 bg-gray-200 rounded-full flex items-center justify-center mb-4">
                                 <ImageIcon className="w-8 h-8 text-gray-400" />
                               </div>
                               <p className="text-sm text-gray-500 text-center mb-1">이미지 미리보기 영역</p>
-                              <p className="text-xs text-gray-400 text-center">
-                                좌측에서 프롬프트를 입력하고<br />
-                                "이미지 생성" 버튼을 클릭하세요
-                              </p>
+                              {section.isUploadOnly ? (
+                                <p className="text-xs text-gray-400 text-center">
+                                  좌측에서 직접 업로드 버튼을 누르거나<br />이곳을 클릭하여 이미지를 등록하세요
+                                </p>
+                              ) : (
+                                <p className="text-xs text-gray-400 text-center">
+                                  좌측에서 프롬프트를 입력하고<br />
+                                  "이미지 생성" 버튼을 클릭하세요
+                                </p>
+                              )}
                             </div>
                           </div>
                         )}

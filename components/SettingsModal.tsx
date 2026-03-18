@@ -1383,76 +1383,111 @@ export const SettingsModal: React.FC<Props> = ({ isOpen, onClose }) => {
                         )}
                       </div>
 
-                      {/* 이미지 슬롯 에디터 */}
-                      <div className="bg-blue-50/50 border border-blue-100 rounded-lg p-4">
-                        <div className="flex items-center justify-between mb-3">
-                          <label className="text-xs font-bold text-blue-700 flex items-center">
-                            <ImageIcon className="w-3 h-3 mr-1" />
-                            이미지 슬롯 ({(section.imageSlots || []).length})
-                          </label>
-                          <button
-                            onClick={() => addImageSlot(idx)}
-                            className="text-xs bg-blue-600 hover:bg-blue-700 text-white px-2 py-1 rounded flex items-center gap-1 transition-colors"
-                          >
-                            <Plus className="w-3 h-3" /> 슬롯 추가
-                          </button>
+                      {/* 업로드 전용 섹션 토글 */}
+                      <div className={`rounded-lg p-3 border ${section.isUploadOnly ? 'bg-sky-50 border-sky-300' : 'bg-gray-50 border-gray-200'} transition-colors`}>
+                        <div
+                          className="flex items-center justify-between cursor-pointer"
+                          onClick={() => {
+                            const newSections = [...editingTemplate!.sections];
+                            newSections[idx] = { ...newSections[idx], isUploadOnly: !section.isUploadOnly };
+                            setEditingTemplate({ ...editingTemplate!, sections: newSections });
+                          }}
+                        >
+                          <div className="flex items-center gap-2">
+                            <Upload className="w-4 h-4 text-sky-600" />
+                            <div>
+                              <span className="text-xs font-bold text-gray-700">업로드 전용 섹션</span>
+                              <p className="text-[10px] text-gray-400 mt-0.5">AI 이미지 생성 없이 사용자가 직접 이미지를 업로드</p>
+                            </div>
+                          </div>
+                          <div className="flex-shrink-0">
+                            {section.isUploadOnly ? (
+                              <ToggleRight className="w-8 h-8 text-sky-500" />
+                            ) : (
+                              <ToggleLeft className="w-8 h-8 text-gray-300" />
+                            )}
+                          </div>
                         </div>
-
-                        {(section.imageSlots && section.imageSlots.length > 0) ? (
-                          <div className="space-y-3">
-                            {section.imageSlots.map((slot, slotIdx) => (
-                              <div key={slot.id} className="bg-white rounded-lg border border-blue-200 p-3">
-                                <div className="flex items-center justify-between mb-2">
-                                  <span className="text-xs font-medium text-gray-500">슬롯 #{slotIdx + 1}</span>
-                                  <button
-                                    onClick={() => removeImageSlot(idx, slotIdx)}
-                                    className="text-gray-400 hover:text-red-500 p-1 rounded hover:bg-red-50 transition-colors"
-                                    title="슬롯 삭제"
-                                  >
-                                    <Trash2 className="w-3 h-3" />
-                                  </button>
-                                </div>
-
-                                {/* 슬롯 타입 선택 */}
-                                <div className="mb-2">
-                                  <select
-                                    value={slot.slotType}
-                                    onChange={(e) => updateImageSlot(idx, slotIdx, 'slotType', e.target.value)}
-                                    className="w-full text-xs border border-gray-200 rounded p-2 bg-white focus:ring-1 focus:ring-blue-500 outline-none"
-                                  >
-                                    {IMAGE_SLOT_TYPE_OPTIONS.map(opt => (
-                                      <option key={opt.value} value={opt.value}>{opt.label}</option>
-                                    ))}
-                                  </select>
-                                </div>
-
-                                {/* 이미지 프롬프트 */}
-                                <textarea
-                                  rows={2}
-                                  value={slot.prompt}
-                                  onChange={(e) => updateImageSlot(idx, slotIdx, 'prompt', e.target.value)}
-                                  placeholder="예: Full body shot of model wearing [PRODUCT] with natural lighting..."
-                                  className="w-full text-xs border border-gray-200 rounded p-2 focus:ring-1 focus:ring-blue-500 outline-none resize-none"
-                                />
-                              </div>
-                            ))}
-                          </div>
-                        ) : (
-                          <div className="text-center py-4 text-gray-400 text-xs">
-                            <ImageIcon className="w-8 h-8 mx-auto mb-2 opacity-40" />
-                            <p>이미지 슬롯이 없습니다</p>
-                            <p className="text-[10px] mt-1">"슬롯 추가" 버튼을 클릭하여 추가하세요</p>
-                          </div>
-                        )}
-
-                        {/* 하위 호환: 기존 imagePrompt가 있으면 표시 */}
-                        {section.imagePrompt && (!section.imageSlots || section.imageSlots.length === 0) && (
-                          <div className="mt-3 p-2 bg-amber-50 rounded border border-amber-200">
-                            <p className="text-xs text-amber-600 mb-1">📝 기존 프롬프트 (슬롯으로 마이그레이션 필요)</p>
-                            <p className="text-xs text-gray-600">{section.imagePrompt}</p>
-                          </div>
-                        )}
                       </div>
+
+                      {/* 업로드 전용일 때 안내 메시지, 아닐 때 이미지 슬롯 에디터 */}
+                      {section.isUploadOnly ? (
+                        <div className="bg-sky-50 border border-dashed border-sky-300 rounded-lg p-6 text-center">
+                          <Upload className="w-10 h-10 mx-auto mb-2 text-sky-400" />
+                          <p className="text-sm font-medium text-sky-700">이 섹션은 사용자 직접 업로드 전용입니다</p>
+                          <p className="text-xs text-sky-500 mt-1">AI 이미지 생성/프롬프트 없이, 사용자가 이미지를 직접 등록합니다.</p>
+                        </div>
+                      ) : (
+                        <div className="bg-blue-50/50 border border-blue-100 rounded-lg p-4">
+                          <div className="flex items-center justify-between mb-3">
+                            <label className="text-xs font-bold text-blue-700 flex items-center">
+                              <ImageIcon className="w-3 h-3 mr-1" />
+                              이미지 슬롯 ({(section.imageSlots || []).length})
+                            </label>
+                            <button
+                              onClick={() => addImageSlot(idx)}
+                              className="text-xs bg-blue-600 hover:bg-blue-700 text-white px-2 py-1 rounded flex items-center gap-1 transition-colors"
+                            >
+                              <Plus className="w-3 h-3" /> 슬롯 추가
+                            </button>
+                          </div>
+
+                          {(section.imageSlots && section.imageSlots.length > 0) ? (
+                            <div className="space-y-3">
+                              {section.imageSlots.map((slot, slotIdx) => (
+                                <div key={slot.id} className="bg-white rounded-lg border border-blue-200 p-3">
+                                  <div className="flex items-center justify-between mb-2">
+                                    <span className="text-xs font-medium text-gray-500">슬롯 #{slotIdx + 1}</span>
+                                    <button
+                                      onClick={() => removeImageSlot(idx, slotIdx)}
+                                      className="text-gray-400 hover:text-red-500 p-1 rounded hover:bg-red-50 transition-colors"
+                                      title="슬롯 삭제"
+                                    >
+                                      <Trash2 className="w-3 h-3" />
+                                    </button>
+                                  </div>
+
+                                  {/* 슬롯 타입 선택 */}
+                                  <div className="mb-2">
+                                    <select
+                                      value={slot.slotType}
+                                      onChange={(e) => updateImageSlot(idx, slotIdx, 'slotType', e.target.value)}
+                                      className="w-full text-xs border border-gray-200 rounded p-2 bg-white focus:ring-1 focus:ring-blue-500 outline-none"
+                                    >
+                                      {IMAGE_SLOT_TYPE_OPTIONS.map(opt => (
+                                        <option key={opt.value} value={opt.value}>{opt.label}</option>
+                                      ))}
+                                    </select>
+                                  </div>
+
+                                  {/* 이미지 프롬프트 */}
+                                  <textarea
+                                    rows={2}
+                                    value={slot.prompt}
+                                    onChange={(e) => updateImageSlot(idx, slotIdx, 'prompt', e.target.value)}
+                                    placeholder="예: Full body shot of model wearing [PRODUCT] with natural lighting..."
+                                    className="w-full text-xs border border-gray-200 rounded p-2 focus:ring-1 focus:ring-blue-500 outline-none resize-none"
+                                  />
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <div className="text-center py-4 text-gray-400 text-xs">
+                              <ImageIcon className="w-8 h-8 mx-auto mb-2 opacity-40" />
+                              <p>이미지 슬롯이 없습니다</p>
+                              <p className="text-[10px] mt-1">"슬롯 추가" 버튼을 클릭하여 추가하세요</p>
+                            </div>
+                          )}
+
+                          {/* 하위 호환: 기존 imagePrompt가 있으면 표시 */}
+                          {section.imagePrompt && (!section.imageSlots || section.imageSlots.length === 0) && (
+                            <div className="mt-3 p-2 bg-amber-50 rounded border border-amber-200">
+                              <p className="text-xs text-amber-600 mb-1">📝 기존 프롬프트 (슬롯으로 마이그레이션 필요)</p>
+                              <p className="text-xs text-gray-600">{section.imagePrompt}</p>
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
                   </div>
                 ))}

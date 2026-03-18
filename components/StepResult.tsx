@@ -1,6 +1,6 @@
 import React, { useState, useCallback } from 'react';
 import { ProductAnalysis, AppMode, UploadedFile } from '../types';
-import { Download, Code, CheckCircle, ExternalLink, Table, Loader2, RefreshCw, Settings, X, MessageSquare, Image as ImageIcon, Eye, ArrowLeft, Home, Copy } from 'lucide-react';
+import { Download, Code, CheckCircle, ExternalLink, Table, Loader2, RefreshCw, Settings, X, MessageSquare, Image as ImageIcon, Eye, ArrowLeft, Home, Copy, Upload } from 'lucide-react';
 import { saveToGoogleSheet, openGoogleSheet, generateCSV, getGasUrl, DEFAULT_GAS_URL } from '../services/googleSheetService';
 import { generateSectionImage } from '../services/geminiService';
 import { useToastContext } from '../contexts/ToastContext';
@@ -78,6 +78,16 @@ export const StepResult: React.FC<Props> = ({ data, onRestart, onGoBack, mode, u
       const isMaterialDetail = section.sectionType === 'material_detail';
       const isGrid = (section.layoutType === 'grid-1' || section.layoutType === 'grid-2' || section.layoutType === 'grid-3') && section.imageSlots && section.imageSlots.length > 0;
       const gridCols = section.layoutType === 'grid-3' ? 3 : section.layoutType === 'grid-2' ? 2 : 1;
+
+      // ★ 업로드 전용 섹션: 제목 + 이미지만 렌더링 (content 없음)
+      if (section.isUploadOnly) {
+        return `
+            <section class="section">
+                <h2>${section.title}</h2>
+                ${section.imageUrl ? `<div style="overflow: hidden; border-radius: 8px; margin-bottom: 30px; display: flex; align-items: center; justify-content: center; background: #f5f5f5;"><img src="images/section_${section.id}.png" alt="${section.title}" style="max-width: 100%; height: auto; object-fit: contain;" /></div>` : ''}
+            </section>
+            `;
+      }
 
       // 콜라주는 단일 이미지로 렌더링 (full-width와 동일)
       if (isCollage && section.imageUrl) {
@@ -283,6 +293,15 @@ export const StepResult: React.FC<Props> = ({ data, onRestart, onGoBack, mode, u
       const isTextOnly = layoutType === 'text-only';
       const gridCols = layoutType === 'grid-3' ? 3 : layoutType === 'grid-2' ? 2 : 1;
       const hasMultipleSlots = section.imageSlots && section.imageSlots.length > 1;
+
+      // ★ 업로드 전용 섹션: 제목 + 이미지만 렌더링 (content 없음)
+      if (section.isUploadOnly) {
+        return `
+        <section class="section">
+            <h2>${section.title}</h2>
+            ${section.imageUrl ? `<div style="overflow: hidden; border-radius: 12px; margin-bottom: 35px; display: flex; align-items: center; justify-content: center; background: #f5f5f5;"><img src="${section.imageUrl}" alt="${section.title}" style="max-width: 100%; height: auto; object-fit: contain;" /></div>` : ''}
+        </section>`;
+      }
 
       // 콜라주는 단일 이미지로 렌더링
       if (isCollageLayout && section.imageUrl) {
@@ -915,7 +934,9 @@ ${data.marketingCopy}
                     <div key={section.id} className="py-16 px-6 border-b border-gray-100 last:border-0 bg-white">
                       <div className="max-w-3xl mx-auto text-center">
                         <h2 className="text-3xl font-bold text-gray-900 mb-6">{section.title}</h2>
-                        <p className="text-lg text-gray-600 whitespace-pre-line leading-relaxed mb-8">{section.content}</p>
+                        {!section.isUploadOnly && (
+                          <p className="text-lg text-gray-600 whitespace-pre-line leading-relaxed mb-8">{section.content}</p>
+                        )}
 
                         {/* Grid Layout: 여러 이미지 표시 */}
                         {isGridLayout && hasMultipleSlots ? (
@@ -978,16 +999,18 @@ ${data.marketingCopy}
                                     />
                                   </div>
                                 </div>
-                                <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity">
-                                  <button
-                                    onClick={() => handleOpenRegenModal(section.id, section.imagePrompt)}
-                                    disabled={!!regeneratingId}
-                                    className="bg-white/90 hover:bg-white text-gray-700 p-2.5 rounded-full shadow-lg border border-gray-200 transition-all hover:scale-105 disabled:opacity-70 disabled:scale-100"
-                                    title="이미지 다시 생성 (프롬프트 수정)"
-                                  >
-                                    <RefreshCw className={`w-5 h-5 ${regeneratingId === section.id ? 'animate-spin text-blue-600' : ''}`} />
-                                  </button>
-                                </div>
+                                {!section.isUploadOnly && (
+                                  <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity">
+                                    <button
+                                      onClick={() => handleOpenRegenModal(section.id, section.imagePrompt)}
+                                      disabled={!!regeneratingId}
+                                      className="bg-white/90 hover:bg-white text-gray-700 p-2.5 rounded-full shadow-lg border border-gray-200 transition-all hover:scale-105 disabled:opacity-70 disabled:scale-100"
+                                      title="이미지 다시 생성 (프롬프트 수정)"
+                                    >
+                                      <RefreshCw className={`w-5 h-5 ${regeneratingId === section.id ? 'animate-spin text-blue-600' : ''}`} />
+                                    </button>
+                                  </div>
+                                )}
                                 {regeneratingId === section.id && (
                                   <div className="absolute inset-0 bg-white/50 flex items-center justify-center rounded-lg">
                                     <div className="bg-white px-4 py-2 rounded-full shadow-lg flex items-center text-sm font-medium text-blue-600">
@@ -1000,18 +1023,27 @@ ${data.marketingCopy}
                             );
                           })()
                         ) : !isTextOnly && !section.imageUrl ? (
-                          /* No Image Placeholder */
-                          <div className="w-full h-64 bg-gray-100 rounded-lg flex flex-col items-center justify-center mb-8 text-gray-400 group relative">
-                            <span className="mb-2">이미지 없음 (No Image)</span>
-                            <button
-                              onClick={() => handleOpenRegenModal(section.id, section.imagePrompt)}
-                              disabled={!!regeneratingId}
-                              className="mt-2 text-sm text-blue-600 hover:text-blue-700 flex items-center font-medium bg-white px-3 py-1.5 rounded-full border shadow-sm"
-                            >
-                              <RefreshCw className={`w-4 h-4 mr-1.5 ${regeneratingId === section.id ? 'animate-spin' : ''}`} />
-                              이미지 생성
-                            </button>
-                          </div>
+                          section.isUploadOnly ? (
+                            /* 업로드 전용 섹션: 이미지 미등록 안내 */
+                            <div className="w-full h-64 bg-sky-50 border-2 border-dashed border-sky-300 rounded-lg flex flex-col items-center justify-center mb-8 text-sky-500">
+                              <Upload className="w-8 h-8 mb-2" />
+                              <span className="text-sm font-medium">사용자 직접 업로드 이미지 영역</span>
+                              <span className="text-xs text-sky-400 mt-1">이미지가 등록되지 않았습니다</span>
+                            </div>
+                          ) : (
+                            /* No Image Placeholder */
+                            <div className="w-full h-64 bg-gray-100 rounded-lg flex flex-col items-center justify-center mb-8 text-gray-400 group relative">
+                              <span className="mb-2">이미지 없음 (No Image)</span>
+                              <button
+                                onClick={() => handleOpenRegenModal(section.id, section.imagePrompt)}
+                                disabled={!!regeneratingId}
+                                className="mt-2 text-sm text-blue-600 hover:text-blue-700 flex items-center font-medium bg-white px-3 py-1.5 rounded-full border shadow-sm"
+                              >
+                                <RefreshCw className={`w-4 h-4 mr-1.5 ${regeneratingId === section.id ? 'animate-spin' : ''}`} />
+                                이미지 생성
+                              </button>
+                            </div>
+                          )
                         ) : null}
                       </div>
                     </div>

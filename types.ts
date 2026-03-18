@@ -157,6 +157,7 @@ export interface SectionData {
   fixedImageBase64?: string;         // 고정 이미지 Base64
   fixedImageMimeType?: string;       // 고정 이미지 MIME
   useFixedImage?: boolean;           // 고정 이미지 사용 여부
+  isUploadOnly?: boolean;            // 업로드 전용 섹션 (AI 생성 없이 사용자 직접 업로드)
 
   // 단일 이미지 크롭/줌 설정
   cropZoom?: number;                 // 저장된 확대 배율 (기본 1)

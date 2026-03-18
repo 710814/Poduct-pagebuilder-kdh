@@ -286,9 +286,11 @@ const AppContent: React.FC = () => {
     setStep(Step.GENERATING);
     setIsLoading(true);
 
-    // 생성할 섹션 계산 (고정 이미지, 미리보기, text-only 레이아웃 제외)
+    // 생성할 섹션 계산 (고정 이미지, 업로드전용 섹션, 미리보기, text-only 레이아웃 제외)
     const sectionsToGenerate = analysisResult.sections.filter(
-      s => !s.isOriginalImage && !s.isPreview && s.imagePrompt && !s.imageUrl && s.layoutType !== 'text-only'
+      s => {
+        return !s.isOriginalImage && !s.isUploadOnly && !s.isPreview && s.imagePrompt && !s.imageUrl && s.layoutType !== 'text-only'
+      }
     );
 
     // 진행 상태 초기화
@@ -327,6 +329,16 @@ const AppContent: React.FC = () => {
             isOriginalImage: true
           });
           // 완료 목록에 추가
+          setGenerationProgress(prev => ({
+            ...prev,
+            completedSectionIds: [...prev.completedSectionIds, section.id]
+          }));
+        }
+        // 업로드 전용 섹션 (isUploadOnly 플래그)
+        else if (section.isUploadOnly) {
+          console.log(`[Generate] 섹션 "${section.title}": 업로드 전용 섹션 (AI 생성 건너뜀)`);
+          newSections.push(section);
+          // 완료 목록에 추가 (생성할 섹션이 아니므로 진행률 계산에는 영향 없지만 일관성을 위해 추가)
           setGenerationProgress(prev => ({
             ...prev,
             completedSectionIds: [...prev.completedSectionIds, section.id]
