@@ -312,7 +312,7 @@ export const FASHION_LOOKBOOK_TEMPLATE: Template = {
       title: '제품 정보',
       content: '소재, 사이즈 가이드, 세탁 안내 등 상세 제품 정보입니다.\\n\\n**소재**: 폴리에스터 70%, 아크릴 20%, 울 10%\\n**두께감**: 중간 / **비침**: 없음 / **신축성**: 약간 있음\\n\\n**사이즈 (cm)**\\n| 사이즈 | 어깨 | 가슴 | 소매 | 총장 |\\n|--------|------|------|------|------|\\n| S | 38 | 94 | 58 | 52 |\\n| M | 40 | 98 | 59 | 54 |\\n| L | 42 | 102 | 60 | 56 |',
       sectionType: 'spec' as SectionType,
-      layoutType: 'text-only' as LayoutType,
+      layoutType: 'full-width' as LayoutType,
       imagePrompt: ''
     },
 
