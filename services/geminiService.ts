@@ -1,6 +1,7 @@
 import { AppMode, ProductAnalysis, SectionData, Template, ProductInputData } from "../types";
 import { getGasUrl, DEFAULT_GAS_URL } from "./googleSheetService";
 import { getCategoryPromptGuidelines } from "./categoryPresets";
+import { getRandomizedLifestyleParams } from "./templateService";
 import type {
   GeminiRequest,
   GeminiResponse,
@@ -981,13 +982,40 @@ const applyTemplateStructure = (
       };
     });
 
+    // ★ 라이프스타일 코디 섹션: 조합형 랜덤 플레이스홀더 치환
+    let lifestyleEnhancedSlots = enhancedSlots;
+    if (templateSection.id === 'sec-lookbook-styling2') {
+      const lifestyleParams = getRandomizedLifestyleParams();
+      console.log('[applyTemplateStructure] ★ 라이프스타일 랜덤 조합:', lifestyleParams.map((p, i) =>
+        `슬롯${i+1}: [${p.mood}] ${p.coordination}`
+      ));
+
+      lifestyleEnhancedSlots = enhancedSlots.map((slot, idx) => {
+        let p = slot.prompt;
+        const params = lifestyleParams[idx];
+        if (params) {
+          p = p.replace(`{{LIFESTYLE_POSE_${idx + 1}}}`, params.pose);
+          p = p.replace(`{{LIFESTYLE_COORD_${idx + 1}}}`, params.coordination);
+          p = p.replace(`{{LIFESTYLE_MOOD_${idx + 1}}}`, params.mood);
+          p = p.replace(`{{LIFESTYLE_BG_${idx + 1}}}`, params.background);
+          p = p.replace(`{{LIFESTYLE_DIVERSITY_${idx + 1}}}`,
+            `DIVERSITY INSTRUCTION: This is image ${idx + 1} of 3 in a lifestyle styling series. ` +
+            `This image's concept is "${params.mood}". ` +
+            `Each image MUST show a COMPLETELY DIFFERENT coordination concept, background, pose, and accessories. ` +
+            `Do NOT repeat any styling element from other images in this series.`
+          );
+        }
+        return { ...slot, prompt: p };
+      });
+    }
+
     // ★ 후면 이미지 존재 여부에 따라 3번째 슬롯 프롬프트를 조건부 교체
     const hasBackImage = [
       ...(productData?.mainImages || []),
       ...(productData?.colorOptions?.flatMap(c => c.images) || [])
     ].some(img => img.role === 'back');
 
-    const finalSlots = enhancedSlots.map((slot, slotIdx) => {
+    const finalSlots = lifestyleEnhancedSlots.map((slot, slotIdx) => {
       if (slot.prompt.includes('EITHER Back View OR Side Profile')) {
         if (hasBackImage) {
           // ★ 후면 이미지가 있으면 BACK VIEW 강제 적용
@@ -1039,7 +1067,7 @@ const applyTemplateStructure = (
           ),
 
       // 기존 호환성: 단일 imagePrompt (첫 번째 슬롯 기준)
-      imagePrompt: enhancedSlots[0]?.prompt || baseImagePrompt,
+      imagePrompt: lifestyleEnhancedSlots[0]?.prompt || baseImagePrompt,
     };
 
     // 고정 이미지가 활성화되어 있으면 즉시 이미지 URL 설정
@@ -2397,13 +2425,21 @@ High quality, hyperrealistic, ultra photorealistic, shot on Canon EOS R5 with 85
         }
       ];
 
+      // ★ 라이프스타일 코디 섹션은 창의성 파라미터 상향 (색상 코디 섹션은 기존값 유지)
+      const isLifestyleDiversity = fullPrompt.includes('lifestyle styling series');
+      const genTemperature = isLifestyleDiversity ? 0.45 : 0.25;
+      const genTopK = isLifestyleDiversity ? 40 : 20;
+      if (isLifestyleDiversity) {
+        console.log(`[generateSectionImage] ★ 라이프스타일 다양성 모드: temperature=${genTemperature}, topK=${genTopK}`);
+      }
+
       // GAS 프록시 사용
       const result = await callGeminiViaProxy({
         model: MODEL_IMAGE_GEN,
         contents: { parts },
         config: {
-          temperature: 0.25,  // ★ 0.3→0.25: 색상 일관성과 포즈 다양성의 최적 균형점
-          topK: 20            // ★ 32→20: 적절한 선택지 범위로 일관성 향상
+          temperature: genTemperature,  // ★ 라이프스타일: 0.45 / 기본: 0.25
+          topK: genTopK                 // ★ 라이프스타일: 40 / 기본: 20
         },
         safetySettings: imageGenSafetySettings
       });
@@ -2497,35 +2533,36 @@ const BACKGROUND_PROMPTS: Record<BackgroundType, string> = {
 const ENHANCEMENT_PROMPT_TEMPLATES: Record<ImageEnhancementType, (product: string, options: ImageEnhancementOptions, modelDesc: string, cutStyleDirective?: string) => string> = {
   background_change: (product, options, _, __) => {
     const bgPrompt = options.backgroundType ? BACKGROUND_PROMPTS[options.backgroundType] : BACKGROUND_PROMPTS.studio_white;
-    return `Professional product photography of ${product}. 
+    const customDirective = options.customPrompt ? `\n## 🚨 HIGHEST PRIORITY USER DIRECTIVE (MUST FOLLOW OVER ALL OTHER STYLING):\n${options.customPrompt}\n\n` : '';
+    return `${customDirective}Professional product photography of ${product}. 
 ${bgPrompt}. 
 The product must be clearly visible and be the main focus. 
-High quality, 4K resolution, e-commerce ready photography.
-${options.customPrompt || ''}`.trim();
+High quality, 4K resolution, e-commerce ready photography.`.trim();
   },
 
   model_shot: (product, options, modelDesc, cutStyleDirective) => {
     const modelDescription = modelDesc || 'a professional model';
     const cutStyleSection = cutStyleDirective ? `${cutStyleDirective}\n\n` : '';
-    return `${cutStyleSection}Fashion photography of ${modelDescription} wearing/holding ${product}.
+    const customDirective = options.customPrompt ? `\n## 🚨 HIGHEST PRIORITY USER DIRECTIVE (MUST FOLLOW OVER ALL OTHER STYLING):\n${options.customPrompt}\n\n` : '';
+    return `${customDirective}${cutStyleSection}Fashion photography of ${modelDescription} wearing/holding ${product}.
 ${!cutStyleDirective ? 'Full body shot, natural confident pose, looking at camera.' : 'The camera angle and pose MUST follow the override directive above.'}
 Clean studio or lifestyle background, professional lighting.
 The product (${product}) must be clearly visible and the main focus.
-High quality, 4K resolution, fashion e-commerce photography.
-${options.customPrompt || ''}`.trim();
+High quality, 4K resolution, fashion e-commerce photography.`.trim();
   },
 
   lifestyle: (product, options, _) => {
-    return `Lifestyle product photography of ${product} in a real-life context.
+    const customDirective = options.customPrompt ? `\n## 🚨 HIGHEST PRIORITY USER DIRECTIVE (MUST FOLLOW OVER ALL OTHER STYLING):\n${options.customPrompt}\n\n` : '';
+    return `${customDirective}Lifestyle product photography of ${product} in a real-life context.
 Natural setting showing the product being used in daily life.
 Warm, inviting atmosphere, soft natural lighting.
 The product must be clearly visible and recognizable.
-High quality, 4K resolution, lifestyle photography.
-${options.customPrompt || ''}`.trim();
+High quality, 4K resolution, lifestyle photography.`.trim();
   },
 
   multi_angle: (product, options, _) => {
-    return `Professional product photography collage of ${product} from multiple angles.
+    const customDirective = options.customPrompt ? `\n## 🚨 HIGHEST PRIORITY USER DIRECTIVE (MUST FOLLOW OVER ALL OTHER STYLING):\n${options.customPrompt}\n\n` : '';
+    return `${customDirective}Professional product photography collage of ${product} from multiple angles.
 Create a 2x2 grid showing:
 - Top left: Front view
 - Top right: Side profile  
@@ -2533,12 +2570,12 @@ Create a 2x2 grid showing:
 - Bottom right: Detail close-up
 Clean white studio background for all shots.
 Consistent lighting across all angles.
-High quality, 4K resolution, e-commerce ready.
-${options.customPrompt || ''}`.trim();
+High quality, 4K resolution, e-commerce ready.`.trim();
   },
 
-  remove_bg: (product, _, __) => {
-    return `Studio product photography of ${product} on a pure white background.
+  remove_bg: (product, options, __) => {
+    const customDirective = options.customPrompt ? `\n## 🚨 HIGHEST PRIORITY USER DIRECTIVE (MUST FOLLOW OVER ALL OTHER STYLING):\n${options.customPrompt}\n\n` : '';
+    return `${customDirective}Studio product photography of ${product} on a pure white background.
 Clean isolated product shot, no shadows, perfect for e-commerce.
 The product should be the only element visible.
 High quality, 4K resolution, transparent background ready.`.trim();

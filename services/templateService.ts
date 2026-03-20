@@ -199,6 +199,112 @@ const DIVERSE_POSES = {
 };
 
 /**
+ * ═══════════════════════════════════════════════
+ * 라이프스타일 코디 조합형 랜덤화 시스템
+ * - 카테고리별 개별 풀에서 독립 랜덤 선택 → 조합
+ * - 가방(12) × 악세서리(14) × 하의(10) × 무드(10) = 16,800+ 고유 조합
+ * ═══════════════════════════════════════════════
+ */
+
+/** 가방 카테고리 */
+const BAG_POOL = [
+  'a structured leather tote bag',
+  'a woven crossbody bag',
+  'a quilted chain shoulder bag',
+  'a canvas bucket bag',
+  'a slim envelope clutch',
+  'a mini top-handle bag',
+  'a leather belt bag',
+  'a raffia basket bag',
+  'a crescent-shaped hobo bag',
+  'a boxy satchel with gold hardware',
+  'a drawstring pouch bag',
+  'a transparent PVC tote with inner pouch',
+];
+
+/** 악세서리 카테고리 (주얼리, 모자, 아이웨어 등) */
+const ACCESSORY_POOL = [
+  'layered gold chain necklaces',
+  'pearl drop earrings',
+  'a wide-brim straw hat',
+  'retro cat-eye sunglasses',
+  'a dainty ring stack',
+  'chunky resin bangles',
+  'a silk neck ribbon',
+  'oversized round sunglasses',
+  'a leather-strap wristwatch',
+  'geometric hoop earrings',
+  'a velvet hair bow',
+  'a beret hat',
+  'thin gold cuff bracelets',
+  'tortoiseshell hair clip',
+];
+
+/** 하의 카테고리 */
+const BOTTOM_POOL = [
+  'high-waisted wide-leg trousers',
+  'a pleated midi skirt',
+  'slim straight-leg denim jeans',
+  'tailored cigarette pants',
+  'a flowy A-line skirt',
+  'cropped flare pants',
+  'a wrap midi skirt',
+  'relaxed linen pants',
+  'a pencil skirt',
+  'cargo-style wide pants',
+];
+
+/** 스타일링 무드 카테고리 */
+const STYLING_MOOD_POOL = [
+  'polished professional',
+  'effortless chic',
+  'bohemian free-spirited',
+  'cool street casual',
+  'elegant minimalist',
+  'soft romantic',
+  'relaxed resort',
+  'edgy contemporary',
+  'retro vintage glamour',
+  'sporty casual',
+];
+
+/**
+ * 배열에서 N개의 서로 다른 항목을 랜덤 선택 (Fisher-Yates 셔플 기반)
+ */
+function pickNDistinct<T>(arr: T[], n: number): T[] {
+  const shuffled = [...arr];
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+  }
+  return shuffled.slice(0, Math.min(n, shuffled.length));
+}
+
+/**
+ * 라이프스타일 코디 섹션용 랜덤 파라미터 생성
+ * - 3개 슬롯 각각에 서로 다른 배경, 포즈, 가방, 악세서리, 하의, 무드를 조합
+ * - 카테고리 간 독립 선택으로 사실상 무한에 가까운 조합 다양성 보장
+ */
+export function getRandomizedLifestyleParams() {
+  const bgKeys = Object.keys(LIFESTYLE_BACKGROUNDS) as (keyof typeof LIFESTYLE_BACKGROUNDS)[];
+  const poseKeys = Object.keys(DIVERSE_POSES) as (keyof typeof DIVERSE_POSES)[];
+
+  const selectedBgs = pickNDistinct(bgKeys, 3);
+  const selectedPoses = pickNDistinct(poseKeys, 3);
+  const selectedBags = pickNDistinct(BAG_POOL, 3);
+  const selectedAccessories = pickNDistinct(ACCESSORY_POOL, 3);
+  const selectedBottoms = pickNDistinct(BOTTOM_POOL, 3);
+  const selectedMoods = pickNDistinct(STYLING_MOOD_POOL, 3);
+
+  return [0, 1, 2].map(i => ({
+    background: LIFESTYLE_BACKGROUNDS[selectedBgs[i]],
+    pose: DIVERSE_POSES[selectedPoses[i]],
+    coordination: `${selectedBottoms[i]}, ${selectedBags[i]}, and ${selectedAccessories[i]}`,
+    mood: selectedMoods[i],
+  }));
+}
+
+/**
  * 패션 룩북 템플릿 v2 — 7섹션 구조
  * 히어로 → 제품설명 → 색상(2열) → 코디1(컬러별 3장) → 코디설명 → 코디2(3장) → 제품정보
  */
@@ -298,9 +404,9 @@ export const FASHION_LOOKBOOK_TEMPLATE: Template = {
       layoutType: 'grid-1' as LayoutType,
       imagePrompt: 'Lifestyle coordination shots with diverse backgrounds and poses, showing versatile styling',
       imageSlots: [
-        { id: 'slot-style2-1', slotType: 'color_styling', prompt: `REAL HUMAN MODEL wearing the product, WAIST-UP to HIP PRODUCT-FOCUSED shot, {{MODEL_SETTINGS}}, stylishly coordinated with complementary bottom (skirt or pants) and a handbag, COMMERCIAL E-COMMERCE optimized: product fills 65% of frame, softly blurred outdoor background with warm golden hour light, product styling and coordination are the MAIN FOCUS, fashion editorial quality, ${PHOTOREALISM_KEYWORDS}, ${NEGATIVE_ELEMENTS}, CRITICAL: maintain exact product design from reference, Aspect Ratio 3:4, Vertical Portrait Mode`, photographyStyle: 'close-up' },
-        { id: 'slot-style2-2', slotType: 'color_styling', prompt: `REAL HUMAN MODEL wearing the product, UPPER BODY CLOSE-UP from neckline to waist, {{MODEL_SETTINGS}}, natural relaxed pose, coordinated with stylish accessories (necklace, watch), COMMERCIAL E-COMMERCE optimized: product fills 70% of frame, soft warm blurred interior background, product and coordination outfit clearly visible, warm ambient lighting on garment, ${PHOTOREALISM_KEYWORDS}, ${NEGATIVE_ELEMENTS}, CRITICAL: maintain exact product design from reference, Aspect Ratio 3:4, Vertical Portrait Mode`, photographyStyle: 'close-up' },
-        { id: 'slot-style2-3', slotType: 'color_styling', prompt: `REAL HUMAN MODEL wearing the product, WAIST-UP 3/4 ANGLE shot, {{MODEL_SETTINGS}}, coordinated with trendy accessories (bracelet, earrings, scarf), COMMERCIAL E-COMMERCE optimized: product fills 65% of frame, softly blurred background with natural light creating beautiful shadows, product texture and coordination styling clearly visible, artistic editorial composition, ${PHOTOREALISM_KEYWORDS}, ${NEGATIVE_ELEMENTS}, CRITICAL: maintain exact product design from reference, Aspect Ratio 3:4, Vertical Portrait Mode`, photographyStyle: 'close-up' }
+        { id: 'slot-style2-1', slotType: 'color_styling', prompt: `REAL HUMAN MODEL wearing the product, WAIST-UP to HIP PRODUCT-FOCUSED shot, {{MODEL_SETTINGS}}, {{LIFESTYLE_POSE_1}}, creatively coordinated with {{LIFESTYLE_COORD_1}}, {{LIFESTYLE_MOOD_1}} styling vibe, COMMERCIAL E-COMMERCE optimized: product fills 65% of frame, {{LIFESTYLE_BG_1}}, product styling and coordination are the MAIN FOCUS, fashion editorial quality, ${PHOTOREALISM_KEYWORDS}, ${NEGATIVE_ELEMENTS}, CRITICAL: maintain exact product design from reference, Aspect Ratio 3:4, Vertical Portrait Mode, {{LIFESTYLE_DIVERSITY_1}}`, photographyStyle: 'close-up' },
+        { id: 'slot-style2-2', slotType: 'color_styling', prompt: `REAL HUMAN MODEL wearing the product, UPPER BODY CLOSE-UP from neckline to waist, {{MODEL_SETTINGS}}, {{LIFESTYLE_POSE_2}}, creatively coordinated with {{LIFESTYLE_COORD_2}}, {{LIFESTYLE_MOOD_2}} styling vibe, COMMERCIAL E-COMMERCE optimized: product fills 70% of frame, {{LIFESTYLE_BG_2}}, product and coordination outfit clearly visible, warm ambient lighting on garment, ${PHOTOREALISM_KEYWORDS}, ${NEGATIVE_ELEMENTS}, CRITICAL: maintain exact product design from reference, Aspect Ratio 3:4, Vertical Portrait Mode, {{LIFESTYLE_DIVERSITY_2}}`, photographyStyle: 'close-up' },
+        { id: 'slot-style2-3', slotType: 'color_styling', prompt: `REAL HUMAN MODEL wearing the product, WAIST-UP 3/4 ANGLE shot, {{MODEL_SETTINGS}}, {{LIFESTYLE_POSE_3}}, creatively coordinated with {{LIFESTYLE_COORD_3}}, {{LIFESTYLE_MOOD_3}} styling vibe, COMMERCIAL E-COMMERCE optimized: product fills 65% of frame, {{LIFESTYLE_BG_3}}, product texture and coordination styling clearly visible, artistic editorial composition, ${PHOTOREALISM_KEYWORDS}, ${NEGATIVE_ELEMENTS}, CRITICAL: maintain exact product design from reference, Aspect Ratio 3:4, Vertical Portrait Mode, {{LIFESTYLE_DIVERSITY_3}}`, photographyStyle: 'close-up' }
       ]
     },
 
