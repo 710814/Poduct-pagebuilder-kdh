@@ -1002,7 +1002,9 @@ const applyTemplateStructure = (
             `DIVERSITY INSTRUCTION: This is image ${idx + 1} of 3 in a lifestyle styling series. ` +
             `This image's concept is "${params.mood}". ` +
             `Each image MUST show a COMPLETELY DIFFERENT coordination concept, background, pose, and accessories. ` +
-            `Do NOT repeat any styling element from other images in this series.`
+            `Do NOT repeat any styling element from other images in this series. ` +
+            `The ONLY coordination items allowed are the ones explicitly listed in this prompt. ` +
+            `Do NOT add any scarf, shawl, neck wrap, or any accessory not listed.`
           );
         }
         return { ...slot, prompt: p };

@@ -172,7 +172,7 @@ const PHOTOREALISM_KEYWORDS = 'hyperrealistic, ultra photorealistic, shot on Can
  * 네거티브 프롬프트 -> 긍정적 설명으로 변경
  * ★ "마네킹이 아니다" 대신 "이것은 실제 인간이 착용한 패션 사진이다" 형태로 강조
  */
-const NEGATIVE_ELEMENTS = 'STRICTLY ONE PERSON ONLY in the image — absolutely NO two people, NO side-by-side comparison, NO split image, NO collage. This must be a photo of a REAL PERSON wearing the garment with visible human skin, natural body movement, and realistic fabric draping. The entire product must be fully visible without any cropping. Show the complete garment from neckline to hem';
+const NEGATIVE_ELEMENTS = 'STRICTLY ONE PERSON ONLY in the image — absolutely NO two people, NO side-by-side comparison, NO split image, NO collage. This must be a photo of a REAL PERSON wearing the garment with visible human skin, natural body movement, and realistic fabric draping. The entire product must be fully visible without any cropping. Show the complete garment from neckline to hem. NO scarf, NO shawl, NO neck wrap — only use the coordination items explicitly mentioned in the prompt';
 
 /**
  * 다양한 배경 프리셋 - 단조로움 방지
@@ -230,7 +230,7 @@ const ACCESSORY_POOL = [
   'retro cat-eye sunglasses',
   'a dainty ring stack',
   'chunky resin bangles',
-  'a silk neck ribbon',
+  'a delicate chain belt',
   'oversized round sunglasses',
   'a leather-strap wristwatch',
   'geometric hoop earrings',
