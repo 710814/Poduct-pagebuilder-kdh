@@ -191,11 +191,6 @@ export const SettingsModal: React.FC<Props> = ({ isOpen, onClose }) => {
   const [activeTab, setActiveTab] = useState<'general' | 'templates'>('general');
   const toast = useToastContext();
 
-  // General Settings State
-  const [gasUrl, setGasUrlState] = useState('');
-  const [sheetId, setSheetIdState] = useState('');
-  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'success'>('idle');
-
   // Template State
   const [templates, setTemplates] = useState<Template[]>([]);
   const [defaultTemplateId, setDefaultTemplateIdState] = useState<string>('');
@@ -232,64 +227,23 @@ export const SettingsModal: React.FC<Props> = ({ isOpen, onClose }) => {
 
   useEffect(() => {
     if (isOpen) {
-      // 기본값을 포함하지 않고 가져와서, 사용자가 실제로 입력한 값만 표시
-      const savedUrl = getGasUrl(false);
-      setGasUrlState(savedUrl || '');
-      setSheetIdState(getSheetId());
-      setTemplates(getTemplates());
-      setDefaultTemplateIdState(getDefaultTemplateId());
-      setSaveStatus('idle');
+      const loadData = async () => {
+        const t = await getTemplates();
+        setTemplates(t);
+        setDefaultTemplateIdState(getDefaultTemplateId());
+        
+        // 자동 백업 상태 초기화
+        setAutoBackupState(isAutoBackupEnabled());
+        setLastBackupDate(await getLastBackupDate());
+      };
+      
+      loadData();
       setEditingTemplate(null); // Reset edit mode on open
-
-      // 자동 백업 상태 초기화
-      setAutoBackupState(isAutoBackupEnabled());
-      setLastBackupDate(getLastBackupDate());
-
-      // 디버깅: localStorage에 저장된 실제 값 확인
-      console.log('[Settings] localStorage에서 GAS URL 확인:', localStorage.getItem('gemini_commerce_gas_url'));
-      console.log('[Settings] getGasUrl(false) 결과:', savedUrl);
-      console.log('[Settings] getGasUrl(true) 결과:', getGasUrl(true));
     }
   }, [isOpen]);
 
-  const handleSaveGeneral = async () => {
-    // 공백 제거 후 저장
-    const cleanGasUrl = gasUrl.trim();
-    const cleanSheetId = sheetId.trim();
-
-    saveGasUrl(cleanGasUrl);
-
-    // 항상 저장하도록 수정 (빈 값이라도 저장하여 사용자가 초기화할 수 있게 함)
-    // 단, 서비스 로직상 빈 값이면 Default ID를 반환할 수 있음
-    saveSheetId(cleanSheetId);
-
-    setSaveStatus('saving');
-
-    // 자동 백업이 활성화되어 있고, 유효한 GAS URL이 있으면 백업 실행
-    if (autoBackupEnabled && cleanGasUrl && cleanGasUrl !== DEFAULT_GAS_URL) {
-      const result = await backupSettingsToDrive();
-      if (result.success) {
-        setLastBackupDate(new Date().toISOString());
-      }
-    }
-
-    setTimeout(() => {
-      setSaveStatus('success');
-      toast.success('설정이 저장되었습니다.');
-      setTimeout(() => {
-        setSaveStatus('idle');
-      }, 2000);
-    }, 500);
-  };
-
   // 자동 백업 토글 핸들러
   const handleAutoBackupToggle = async (enabled: boolean) => {
-    // GAS URL이 기본값이면 백업 불가
-    if (enabled && (!gasUrl || gasUrl.trim() === '' || gasUrl === DEFAULT_GAS_URL)) {
-      toast.warning('자동 백업을 사용하려면 먼저 개인 GAS URL을 설정해주세요.');
-      return;
-    }
-
     setAutoBackupState(enabled);
     setAutoBackupEnabled(enabled);
 
@@ -301,7 +255,7 @@ export const SettingsModal: React.FC<Props> = ({ isOpen, onClose }) => {
 
       if (result.success) {
         setLastBackupDate(new Date().toISOString());
-        toast.success('자동 백업이 활성화되었습니다. 설정이 Google Drive에 저장되었습니다.');
+        toast.success('자동 백업이 활성화되었습니다. 설정이 Firebase에 저장되었습니다.');
       } else {
         toast.error('백업 실패: ' + result.message);
         setAutoBackupState(false);
@@ -314,18 +268,13 @@ export const SettingsModal: React.FC<Props> = ({ isOpen, onClose }) => {
 
   // 수동 백업 핸들러
   const handleManualBackup = async () => {
-    if (!gasUrl || gasUrl.trim() === '' || gasUrl === DEFAULT_GAS_URL) {
-      toast.warning('백업을 사용하려면 먼저 개인 GAS URL을 설정해주세요.');
-      return;
-    }
-
     setIsBackingUp(true);
     const result = await backupSettingsToDrive();
     setIsBackingUp(false);
 
     if (result.success) {
       setLastBackupDate(new Date().toISOString());
-      toast.success('설정이 Google Drive에 백업되었습니다.');
+      toast.success('설정이 Firebase에 백업되었습니다.');
     } else {
       toast.error('백업 실패: ' + result.message);
     }
@@ -333,12 +282,7 @@ export const SettingsModal: React.FC<Props> = ({ isOpen, onClose }) => {
 
   // 수동 복원 핸들러
   const handleManualRestore = async () => {
-    if (!gasUrl || gasUrl.trim() === '' || gasUrl === DEFAULT_GAS_URL) {
-      toast.warning('복원을 사용하려면 먼저 개인 GAS URL을 설정해주세요.');
-      return;
-    }
-
-    if (!confirm('Google Drive에서 백업된 설정을 복원하시겠습니까?\n현재 설정이 백업 시점의 설정으로 교체됩니다.')) {
+    if (!confirm('Firebase에서 기존에 백업된 설정을 복원하시겠습니까?\n현재 설정이 백업 시점의 설정으로 교체됩니다.')) {
       return;
     }
 
@@ -771,67 +715,19 @@ export const SettingsModal: React.FC<Props> = ({ isOpen, onClose }) => {
           {!editingTemplate && activeTab === 'general' && (
             <div className="space-y-6 max-w-2xl mx-auto">
 
-              <div className="bg-blue-50 border border-blue-100 rounded-lg p-4 mb-4">
-                <p className="text-sm text-blue-800 flex items-start leading-relaxed">
-                  <Info className="w-5 h-5 mr-2 flex-shrink-0 mt-0.5 text-blue-600" />
-                  <span>
-                    <strong>안전한 데이터 저장:</strong> 입력하신 API 정보는 서버가 아닌 고객님의 <strong>브라우저(로컬 스토리지)</strong>에만 안전하게 저장됩니다.
-                  </span>
-                </p>
-              </div>
-
-              <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm space-y-4">
+              <div className="bg-blue-50 border border-blue-100 rounded-lg p-6 flex items-center justify-between shadow-sm">
                 <div>
-                  <label className="block text-sm font-bold text-gray-700 mb-2">
-                    Google Apps Script (GAS) Web App URL
-                  </label>
-                  <input
-                    type="text"
-                    name="gasUrl"
-                    autoComplete="off"
-                    value={gasUrl}
-                    onChange={(e) => setGasUrlState(e.target.value)}
-                    placeholder="https://script.google.com/macros/s/..."
-                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm transition-shadow"
-                  />
-                  <p className="text-xs text-gray-500 mt-1">배포된 Apps Script의 웹 앱 URL을 입력하세요.</p>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-bold text-gray-700 mb-2">
-                    Google Sheet ID
-                  </label>
-                  <input
-                    type="text"
-                    name="sheetId"
-                    autoComplete="off"
-                    value={sheetId}
-                    onChange={(e) => setSheetIdState(e.target.value)}
-                    placeholder="구글 시트 ID를 입력하세요"
-                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm transition-shadow"
-                  />
-                  <p className="text-xs text-gray-500 mt-1">
-                    구글 시트 주소 중 <code>/d/</code>와 <code>/edit</code> 사이의 문자열입니다.
+                  <h3 className="font-bold text-blue-900 flex items-center text-lg">
+                    <Cloud className="w-6 h-6 mr-2 text-blue-600" />
+                    Firebase 백엔드 연동 완료
+                  </h3>
+                  <p className="text-sm text-blue-700 mt-2 leading-relaxed">
+                    시스템이 안전한 <strong>Firebase 서버</strong>와 성공적으로 연결되어 있습니다. <br />
+                    모든 API 통신과 데이터 저장은 서버에서 안전하게 처리되며 외부로 노출되지 않습니다.
                   </p>
                 </div>
-
-                <div className="pt-2">
-                  <button
-                    onClick={handleSaveGeneral}
-                    disabled={saveStatus === 'saving' || saveStatus === 'success'}
-                    className={`w-full py-3 rounded-lg font-bold transition-all flex justify-center items-center shadow-md ${saveStatus === 'success'
-                      ? 'bg-green-600 hover:bg-green-700 text-white scale-[1.02]'
-                      : 'bg-gray-900 hover:bg-gray-800 text-white'
-                      }`}
-                  >
-                    {saveStatus === 'saving' && <Loader2 className="w-5 h-5 mr-2 animate-spin" />}
-                    {saveStatus === 'success' && <Check className="w-5 h-5 mr-2" />}
-                    {saveStatus === 'idle' && <Save className="w-5 h-5 mr-2" />}
-
-                    {saveStatus === 'saving' && '연동 정보 저장 중...'}
-                    {saveStatus === 'success' && '저장되었습니다!'}
-                    {saveStatus === 'idle' && '설정 저장하기'}
-                  </button>
+                <div className="bg-white p-3 rounded-full shadow-sm border border-blue-100">
+                  <Check className="w-8 h-8 text-green-500" />
                 </div>
               </div>
 
@@ -889,7 +785,7 @@ export const SettingsModal: React.FC<Props> = ({ isOpen, onClose }) => {
                 <div className="grid grid-cols-2 gap-3 pt-2">
                   <button
                     onClick={handleManualBackup}
-                    disabled={isBackingUp || isRestoring || !gasUrl || gasUrl === DEFAULT_GAS_URL}
+                    disabled={isBackingUp || isRestoring}
                     className="py-2.5 px-4 border border-blue-200 bg-blue-50 text-blue-700 rounded-lg font-medium hover:bg-blue-100 transition-colors flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {isBackingUp ? (
@@ -901,7 +797,7 @@ export const SettingsModal: React.FC<Props> = ({ isOpen, onClose }) => {
                   </button>
                   <button
                     onClick={handleManualRestore}
-                    disabled={isBackingUp || isRestoring || !gasUrl || gasUrl === DEFAULT_GAS_URL}
+                    disabled={isBackingUp || isRestoring}
                     className="py-2.5 px-4 border border-gray-200 bg-gray-50 text-gray-700 rounded-lg font-medium hover:bg-gray-100 transition-colors flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {isRestoring ? (
@@ -912,13 +808,6 @@ export const SettingsModal: React.FC<Props> = ({ isOpen, onClose }) => {
                     백업 복원
                   </button>
                 </div>
-
-                {(!gasUrl || gasUrl === DEFAULT_GAS_URL) && (
-                  <p className="text-xs text-amber-600 flex items-center mt-2">
-                    <Info className="w-3 h-3 mr-1" />
-                    백업 기능을 사용하려면 먼저 개인 GAS URL을 설정하세요.
-                  </p>
-                )}
               </div>
             </div>
           )}

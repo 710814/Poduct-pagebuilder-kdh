@@ -1,7 +1,7 @@
 import React, { useState, useCallback } from 'react';
 import { ProductAnalysis, AppMode, UploadedFile } from '../types';
 import { Download, Code, CheckCircle, ExternalLink, Table, Loader2, RefreshCw, Settings, X, MessageSquare, Image as ImageIcon, Eye, ArrowLeft, Home, Copy, Upload } from 'lucide-react';
-import { saveToGoogleSheet, openGoogleSheet, generateCSV, getGasUrl, DEFAULT_GAS_URL } from '../services/googleSheetService';
+import { saveToFirebase, openFirebaseConsole, generateCSV, isFirebaseConnected } from '../services/firebaseService';
 import { generateSectionImage } from '../services/geminiService';
 import { useToastContext } from '../contexts/ToastContext';
 import JSZip from 'jszip';
@@ -461,17 +461,16 @@ ${data.marketingCopy}
     setSaveType('sheet');
 
     try {
-      // 1. Google Apps Script 연동 시도
+      // 1. Firebase 데이터베이스 및 스토리지 연동 시도
       try {
-        let gasUrl = getGasUrl();
+        const isConnected = isFirebaseConnected();
 
-        // --- [NEW] URL 안전장치 추가 ---
-        if (!gasUrl || gasUrl === DEFAULT_GAS_URL) {
+        if (!isConnected) {
           const confirmSettings = window.confirm(
-            "⚠️ 주의: 현재 '기본 데모 서버(Default)'로 설정되어 있습니다.\n\n" +
-            "회원님의 구글 시트/드라이브에 저장하려면 [설정]에서\n" +
-            "새로 배포한 '웹 앱 URL'을 입력해야 합니다.\n\n" +
-            "설정 창으로 이동하시겠습니까? (취소 시 데모 서버로 전송 시도)"
+            "⚠️ 주의: Firebase 백엔드가 설정되지 않았습니다.\n\n" +
+            "회원님의 템플릿과 데이터를 저장하려면 [설정]에서\n" +
+            "백엔드 연결 상태를 확인해야 합니다.\n\n" +
+            "설정 창으로 이동하시겠습니까?"
           );
           if (confirmSettings) {
             onOpenSettings(); // 공통 설정 모달 열기
@@ -479,29 +478,29 @@ ${data.marketingCopy}
           }
         }
 
-        if (gasUrl) {
-          console.log("Starting full data upload with images...");
+        if (isConnected) {
+          console.log("Starting full data upload to Firebase...");
 
-          await saveToGoogleSheet(data, mode);
+          await saveToFirebase(data, mode);
 
           toast.success(
             '✅ 저장 성공!\n\n' +
-            '1. 구글 시트에 텍스트 데이터가 저장되었습니다.\n' +
-            '2. 구글 드라이브에 상품명으로 폴더가 생성되었습니다.\n' +
-            '3. 생성된 이미지가 드라이브 폴더에 저장되었습니다.',
+            '1. Firestore 데이터베이스에 텍스트 데이터가 저장되었습니다.\n' +
+            '2. Firebase Storage에 상품명으로 폴더가 생성되었습니다.\n' +
+            '3. 생성된 이미지가 Storage 폴더에 저장되었습니다.',
             8000
           );
 
-          // 시트 열기 확인
+          // 콘솔 열기 확인
           setTimeout(() => {
-            if (window.confirm('시트를 열어 확인하시겠습니까?')) {
-              openGoogleSheet();
+            if (window.confirm('Firebase 콘솔을 열어 저장된 데이터를 확인하시겠습니까?')) {
+              openFirebaseConsole();
             }
           }, 500);
 
           return;
         }
-      } catch (e) {
+      } catch (e: any) {
         if (e instanceof Error && e.message === "SETTINGS_OPENED") {
           return;
         } else if (e instanceof Error && e.message === "URL_NOT_SET") {

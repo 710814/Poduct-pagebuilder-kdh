@@ -235,7 +235,7 @@ const AppContent: React.FC = () => {
     setStep(Step.ANALYSIS_REVIEW);
     setIsLoading(true);
 
-    const templates = getTemplates();
+    const templates = await getTemplates();
     const selectedTemplate = data.selectedTemplateId ? templates.find(t => t.id === data.selectedTemplateId) : null;
 
     let message = mode === AppMode.CREATION

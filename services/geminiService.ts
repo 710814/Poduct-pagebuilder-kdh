@@ -1,5 +1,5 @@
 import { AppMode, ProductAnalysis, SectionData, Template, ProductInputData } from "../types";
-import { getGasUrl, DEFAULT_GAS_URL } from "./googleSheetService";
+import { getFunctionsUrl } from "./firebaseService";
 import { getCategoryPromptGuidelines } from "./categoryPresets";
 import { getRandomizedLifestyleParams } from "./templateService";
 import type {
@@ -195,7 +195,7 @@ function normalizeUrlForComparison(url: string): string {
 }
 
 /**
- * GAS 프록시를 통해 Gemini API 호출
+ * Cloud Functions 프록시를 통해 Gemini API 호출
  * @param timeoutMs 타임아웃 시간 (밀리초). 기본값: 120000 (2분), 이미지 생성 시: 300000 (5분)
  */
 async function callGeminiViaProxy(requestData: {
@@ -204,36 +204,21 @@ async function callGeminiViaProxy(requestData: {
   config?: GeminiGenerationConfig;
   safetySettings?: GeminiSafetySettings[];
 }, timeoutMs?: number): Promise<GeminiResponse> {
-  const gasUrl = getGasUrl(true);
-
-  if (!gasUrl) {
-    throw new Error('GAS URL이 설정되지 않았습니다. 설정에서 Google Apps Script URL을 입력하세요.');
+  const functionsUrl = getFunctionsUrl();
+  
+  if (!functionsUrl) {
+    throw new Error('Cloud Functions URL이 설정되지 않았습니다. .env 파일의 VITE_CLOUD_FUNCTIONS_URL을 확인하세요.');
   }
 
-  // GAS 프록시 엔드포인트로 요청
-  // GAS는 URL 파라미터로 action을 받음
-  const proxyUrl = `${gasUrl}?action=gemini`;
+  const proxyUrl = `${functionsUrl}/geminiProxy`;
 
   try {
-    console.log('GAS 프록시 호출:', proxyUrl);
+    console.log('Cloud Functions 프록시 호출:', proxyUrl);
     console.log('요청 데이터:', { model: requestData.model, hasContents: !!requestData.contents });
 
-    // GAS는 CORS preflight를 처리하지 않으므로 simple request로 보냄
-    // Content-Type: text/plain으로 변경하면 preflight 없이 요청 가능
-    // GAS는 여전히 e.postData.contents로 JSON을 파싱할 수 있음
-
-    // URL 유효성 검증
-    if (!gasUrl || !gasUrl.includes('script.google.com')) {
-      throw new Error('GAS URL이 올바르지 않습니다. Google Apps Script 웹 앱 URL을 확인하세요.');
-    }
-
     // 타임아웃 설정
-    // 이미지 생성 모델은 더 오래 걸리므로 5분
-    // 이미지 분석(텍스트 감지)도 큰 이미지나 복잡한 이미지의 경우 시간이 걸릴 수 있으므로 3분
-    // 일반 텍스트 분석은 2분
     const isImageGeneration = requestData.model.includes('image') || requestData.model === MODEL_IMAGE_GEN;
 
-    // 이미지 분석 감지: parts 배열에서 inlineData가 있는지 확인
     let hasImageData = false;
     try {
       if (requestData.contents?.parts) {
@@ -247,11 +232,11 @@ async function callGeminiViaProxy(requestData: {
 
     const isImageAnalysis = requestData.model === MODEL_TEXT_VISION && hasImageData;
 
-    let defaultTimeout = 120000; // 기본 2분
+    let defaultTimeout = 120000;
     if (isImageGeneration) {
-      defaultTimeout = 300000; // 이미지 생성: 5분
+      defaultTimeout = 300000;
     } else if (isImageAnalysis) {
-      defaultTimeout = 180000; // 이미지 분석(텍스트 감지): 3분
+      defaultTimeout = 180000;
     }
 
     const timeout = timeoutMs || defaultTimeout;
@@ -275,7 +260,7 @@ async function callGeminiViaProxy(requestData: {
       response = await fetch(proxyUrl, {
         method: 'POST',
         headers: {
-          'Content-Type': 'text/plain;charset=utf-8',
+          'Content-Type': 'application/json',
         },
         body: JSON.stringify({
           model: requestData.model,
@@ -283,49 +268,48 @@ async function callGeminiViaProxy(requestData: {
           config: requestData.config,
           safetySettings: requestData.safetySettings
         }),
-        redirect: 'follow', // GAS 리다이렉트 따라가기
         signal: controller.signal
       });
 
       clearTimeout(timeoutId);
 
-      console.log('GAS 프록시 응답 상태:', response.status, response.statusText);
+      console.log('Cloud Functions 프록시 응답 상태:', response.status, response.statusText);
 
       if (!response.ok) {
         const errorText = await response.text().catch(() => '응답을 읽을 수 없습니다');
-        console.error('GAS 프록시 오류 응답:', errorText);
-        throw new Error(`GAS 프록시 오류 (${response.status}): ${errorText}`);
+        console.error('프록시 오류 응답:', errorText);
+        throw new Error(`프록시 오류 (${response.status}): ${errorText}`);
       }
     } catch (fetchError) {
       clearTimeout(timeoutId);
       if (fetchError instanceof Error && fetchError.name === 'AbortError') {
         const timeoutMinutes = Math.round(timeout / 60000);
         throw new Error(
-          `GAS 프록시 요청이 타임아웃되었습니다 (${timeoutMinutes}분). ` +
+          `프록시 요청이 타임아웃되었습니다 (${timeoutMinutes}분). ` +
           `이미지 생성은 시간이 오래 걸릴 수 있습니다. ` +
           `네트워크 연결을 확인하거나 잠시 후 다시 시도해주세요.`
         );
       }
       if (fetchError instanceof TypeError && fetchError.message.includes('Failed to fetch')) {
-        throw new Error('GAS 웹 앱에 연결할 수 없습니다. 다음을 확인하세요:\n1. GAS URL이 올바른지 확인\n2. GAS 웹 앱이 배포되었는지 확인\n3. 네트워크 연결 확인\n4. 브라우저 콘솔에서 자세한 오류 확인');
+        throw new Error('Cloud Functions에 연결할 수 없습니다. 다음을 확인하세요:\n1. Cloud Functions가 배포되었는지 확인\n2. .env의 VITE_CLOUD_FUNCTIONS_URL이 올바른지 확인\n3. 네트워크 연결 확인');
       }
       throw fetchError;
     }
 
     const result = await response.json();
-    console.log('GAS 프록시 응답:', result);
+    console.log('Cloud Functions 프록시 응답:', result);
 
     if (result.status === 'error') {
-      throw new Error(result.message || 'GAS 프록시에서 오류가 발생했습니다.');
+      throw new Error(result.message || '프록시에서 오류가 발생했습니다.');
     }
 
     if (!result.data) {
-      throw new Error('GAS 프록시 응답에 데이터가 없습니다.');
+      throw new Error('프록시 응답에 데이터가 없습니다.');
     }
 
     return result.data as GeminiResponse;
   } catch (error) {
-    console.error('GAS 프록시 호출 실패:', error);
+    console.error('Cloud Functions 프록시 호출 실패:', error);
     throw error;
   }
 }

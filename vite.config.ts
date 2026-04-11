@@ -35,7 +35,7 @@ export default defineConfig(({ mode }) => {
               // 서비스 분리
               'services': [
                 './services/geminiService',
-                './services/googleSheetService',
+                './services/firebaseService',
                 './services/templateService'
               ],
             },

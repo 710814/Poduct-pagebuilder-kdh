@@ -73,16 +73,26 @@ export const createNewTemplate = (name: string = '새 템플릿', categoryId?: s
  * 저장된 모든 템플릿 가져오기
  * ★ 빌트인 템플릿: 사용자 수정 버전이 있으면 그것을 사용, 없으면 코드 버전 사용
  */
-export const getTemplates = (): Template[] => {
-  const stored = localStorage.getItem(TEMPLATE_STORAGE_KEY);
+const FUNCTIONS_URL = import.meta.env.VITE_CLOUD_FUNCTIONS_URL || '';
+
+/**
+ * 저장된 모든 템플릿 가져오기 (Firestore 연동)
+ * ★ 빌트인 템플릿: 사용자 수정 버전이 있으면 그것을 사용, 없으면 코드 버전 사용
+ */
+export const getTemplates = async (): Promise<Template[]> => {
   let userTemplates: Template[] = [];
 
-  if (stored) {
+  if (FUNCTIONS_URL) {
     try {
-      userTemplates = JSON.parse(stored);
-    } catch (e) {
-      console.error("Failed to parse templates", e);
-      userTemplates = [];
+      const response = await fetch(`${FUNCTIONS_URL}/getTemplates`);
+      if (response.ok) {
+        const result = await response.json();
+        if (result.status === 'success' && result.templates) {
+          userTemplates = result.templates;
+        }
+      }
+    } catch (error) {
+      console.error("[Template Service] Failed to fetch templates from Firestore", error);
     }
   }
 
@@ -94,8 +104,7 @@ export const getTemplates = (): Template[] => {
   ];
   const builtInIds = new Set(builtInTemplates.map(t => t.id));
 
-  // localStorage에 빌트인 템플릿 ID가 있는지 확인
-  // userModifiedBuiltInIds: localStorage에 있으면서 updatedAt이 존재하는 (사용자가 명시적으로 수정한) 템플릿만 인정
+  // Firestore에 빌트인 템플릿 ID가 있는지 확인
   const userModifiedBuiltInIds = new Set(
     userTemplates.filter(t => builtInIds.has(t.id) && t.updatedAt).map(t => t.id)
   );
@@ -103,8 +112,6 @@ export const getTemplates = (): Template[] => {
   // 사용자가 수정하지 않은 빌트인 템플릿만 코드 버전 추가
   const codeBuildIns = builtInTemplates.filter(t => !userModifiedBuiltInIds.has(t.id));
 
-  // 결과: 코드 빌트인(수정 안된 것) + 사용자 커스텀 템플릿 + 사용자가 수정한 빌트인
-  // (수정되지 않은 빌트인은 localStorage에 있더라도 updatedAt이 없으므로 무시)
   const validUserTemplates = userTemplates.filter(t => !builtInIds.has(t.id) || t.updatedAt);
 
   const result = [...codeBuildIns, ...validUserTemplates];
@@ -115,29 +122,35 @@ export const getTemplates = (): Template[] => {
 /**
  * 템플릿 저장하기 (추가 또는 수정)
  */
-export const saveTemplate = (template: Template) => {
-  const templates = getTemplates();
-  const existingIndex = templates.findIndex(t => t.id === template.id);
-
-  let updatedTemplates: Template[];
-
-  if (existingIndex >= 0) {
-    updatedTemplates = [...templates];
-    updatedTemplates[existingIndex] = template;
-  } else {
-    updatedTemplates = [...templates, template];
+export const saveTemplate = async (template: Template): Promise<void> => {
+  if (!FUNCTIONS_URL) return;
+  try {
+    const response = await fetch(`${FUNCTIONS_URL}/saveTemplate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(template)
+    });
+    if (!response.ok) throw new Error(`Status: ${response.status}`);
+  } catch (error) {
+    console.error("[Template Service] Failed to save template", error);
+    throw error;
   }
-
-  localStorage.setItem(TEMPLATE_STORAGE_KEY, JSON.stringify(updatedTemplates));
 };
 
 /**
  * 템플릿 삭제하기
  */
-export const deleteTemplate = (id: string) => {
-  const templates = getTemplates();
-  const updated = templates.filter(t => t.id !== id);
-  localStorage.setItem(TEMPLATE_STORAGE_KEY, JSON.stringify(updated));
+export const deleteTemplate = async (id: string): Promise<void> => {
+  if (!FUNCTIONS_URL) return;
+  try {
+    const response = await fetch(`${FUNCTIONS_URL}/deleteTemplate?id=${encodeURIComponent(id)}`, {
+      method: 'DELETE'
+    });
+    if (!response.ok) throw new Error(`Status: ${response.status}`);
+  } catch (error) {
+    console.error("[Template Service] Failed to delete template", error);
+    throw error;
+  }
 };
 
 const DEFAULT_TEMPLATE_KEY = 'pagegenie_default_template_id';

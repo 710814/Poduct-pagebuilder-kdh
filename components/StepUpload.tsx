@@ -70,7 +70,11 @@ export const StepUpload: React.FC<Props> = ({ mode, onProductSubmit }) => {
   const [modelCutStyle, setModelCutStyle] = useState<ModelSettings['modelCutStyle']>('face_anonymous');
 
   useEffect(() => {
-    setTemplates(getTemplates());
+    const loadTemplates = async () => {
+      const t = await getTemplates();
+      setTemplates(t);
+    };
+    loadTemplates();
   }, []);
 
   // --- Helper Methods ---
