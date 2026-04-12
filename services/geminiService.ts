@@ -12,7 +12,7 @@ import type {
   GeminiSafetySettings
 } from "../types/gemini";
 
-// 보안 강화: API 키는 GAS 프록시를 통해 서버 사이드에서만 사용
+// 보안 강화: API 키는 Firebase 프록시를 통해 서버 사이드에서만 사용
 // 클라이언트에서는 직접 API 키를 사용하지 않음
 
 const MODEL_TEXT_VISION = 'gemini-2.5-flash';
@@ -179,20 +179,6 @@ ${contextPrompt ? `## ADDITIONAL CONTEXT:\n${contextPrompt}` : ''}
 
 High quality, 4K resolution, professional e-commerce photography.`;
 };
-
-/**
- * URL 정규화 함수 - 비교를 위해 모든 공백, 언더스코어, 하이픈 제거
- */
-function normalizeUrlForComparison(url: string): string {
-  return url
-    .trim()
-    .toLowerCase()
-    .replace(/\s+/g, '') // 모든 공백 제거
-    .replace(/_/g, '') // 언더스코어 제거
-    .replace(/-/g, '') // 하이픈 제거
-    .replace(/\/+/g, '/') // 연속된 슬래시 정규화
-    .replace(/\/$/, ''); // 끝의 슬래시 제거
-}
 
 /**
  * Cloud Functions 프록시를 통해 Gemini API 호출
@@ -1320,90 +1306,25 @@ export const extractTemplateFromImage = async (
   mimeType: string
 ): Promise<Template> => {
   try {
-    // GAS 프록시를 통한 호출 시도
-    const gasUrl = getGasUrl(true);
-
-    // URL 정규화 비교
-    const normalizedGasUrl = gasUrl ? normalizeUrlForComparison(gasUrl) : '';
-    const normalizedDefaultUrl = normalizeUrlForComparison(DEFAULT_GAS_URL);
-    const isDefaultUrl = normalizedGasUrl === normalizedDefaultUrl;
-
     console.log('[Template Extract] Using enhanced template extraction schema');
 
-    // GAS URL이 설정되어 있고 기본 데모 URL이 아니면 프록시 사용
-    if (gasUrl && gasUrl.trim() !== '' && !isDefaultUrl) {
-      // GAS 프록시 사용
-      const result = await callGeminiViaProxy({
-        model: MODEL_TEXT_VISION,
-        contents: {
-          parts: [
-            { inlineData: { mimeType, data: base64Image } } as GeminiInlineDataPart,
-            { text: templateExtractionPrompt } as GeminiTextPart
-          ]
-        },
-        config: {
-          responseMimeType: "application/json",
-          responseSchema: templateExtractionSchema,
-          temperature: 0.3,
-        }
-      });
-
-      const text = result.candidates?.[0]?.content?.parts?.[0]?.text;
-      if (!text) throw new Error("No response from Gemini");
-
-      const templateData = JSON.parse(text);
-
-      // Convert to Template format with new structure
-      return convertToTemplate(templateData);
-    }
-
-    // GAS 프록시가 없으면 환경 변수에서 API 키 확인 (Fallback)
-    const apiKey = (window as any).__GEMINI_API_KEY__ ||
-      (import.meta.env?.VITE_GEMINI_API_KEY as string);
-
-    if (!apiKey) {
-      throw new Error(
-        'Gemini API 키가 설정되지 않았습니다.\n\n' +
-        '방법 1: GAS 프록시 사용 (권장)\n' +
-        '  - Google Apps Script에 GEMINI_API_KEY를 스크립트 속성으로 설정\n' +
-        '  - GAS Web App URL을 설정에 입력\n\n' +
-        '방법 2: 환경 변수 사용\n' +
-        '  - .env 파일에 VITE_GEMINI_API_KEY=your_key 추가'
-      );
-    }
-
-    // 직접 API 호출 (Fallback)
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${MODEL_TEXT_VISION}:generateContent?key=${apiKey}`,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          contents: {
-            parts: [
-              { inlineData: { mimeType, data: base64Image } },
-              { text: templateExtractionPrompt }
-            ]
-          },
-          generationConfig: {
-            responseMimeType: "application/json",
-            responseSchema: templateExtractionSchema,
-            temperature: 0.3,
-          }
-        })
+    // Firebase 프록시 사용
+    const result = await callGeminiViaProxy({
+      model: MODEL_TEXT_VISION,
+      contents: {
+        parts: [
+          { inlineData: { mimeType, data: base64Image } } as GeminiInlineDataPart,
+          { text: templateExtractionPrompt } as GeminiTextPart
+        ]
+      },
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: templateExtractionSchema,
+        temperature: 0.3,
       }
-    );
+    });
 
-    if (!response.ok) {
-      const errorData = await response.text();
-      throw new Error(`Gemini API 오류: ${response.status} - ${errorData}`);
-    }
-
-    const result = await response.json();
     const text = result.candidates?.[0]?.content?.parts?.[0]?.text;
-
     if (!text) throw new Error("No response from Gemini");
 
     const templateData = JSON.parse(text);
@@ -1722,131 +1643,23 @@ export const analyzeProductImage = async (
       inlineData: { mimeType: mimeTypes[index], data: b64 }
     }));
 
-    // GAS 프록시를 통한 호출 시도
-    const gasUrl = getGasUrl(true); // 기본값 포함하여 가져오기
-
-    // localStorage에 실제로 저장된 값 확인 (디버깅)
-    const rawSavedUrl = localStorage.getItem('gemini_commerce_gas_url');
-    console.log('[Gemini Service] localStorage 원본 값:', rawSavedUrl);
-    console.log('[Gemini Service] getGasUrl() 결과:', gasUrl);
-    console.log('[Gemini Service] DEFAULT_GAS_URL:', DEFAULT_GAS_URL);
-
-    // URL 정규화 비교
-    const normalizedGasUrl = gasUrl ? normalizeUrlForComparison(gasUrl) : '';
-    const normalizedDefaultUrl = normalizeUrlForComparison(DEFAULT_GAS_URL);
-    const isDefaultUrl = normalizedGasUrl === normalizedDefaultUrl;
-
-    console.log('[Gemini Service] 원본 사용자 URL:', gasUrl);
-    console.log('[Gemini Service] 원본 기본 URL:', DEFAULT_GAS_URL);
-    console.log('[Gemini Service] 정규화된 사용자 URL:', normalizedGasUrl);
-    console.log('[Gemini Service] 정규화된 기본 URL:', normalizedDefaultUrl);
-    console.log('[Gemini Service] 기본 URL과 동일한지:', isDefaultUrl);
-    console.log('[Gemini Service] URL 길이 비교 - 사용자:', normalizedGasUrl.length, '기본:', normalizedDefaultUrl.length);
-
-    // URL이 실제로 다른지 문자 단위로 비교
-    if (normalizedGasUrl && normalizedDefaultUrl) {
-      const diffIndex = Array.from(normalizedGasUrl).findIndex((char, i) => char !== normalizedDefaultUrl[i]);
-      if (diffIndex !== -1) {
-        console.log('[Gemini Service] 첫 번째 차이점 위치:', diffIndex);
-        console.log('[Gemini Service] 사용자 URL의 문자:', normalizedGasUrl[diffIndex], '기본 URL의 문자:', normalizedDefaultUrl[diffIndex]);
+    // Firebase 프록시 사용
+    const result = await callGeminiViaProxy({
+      model: MODEL_TEXT_VISION,
+      contents: {
+        parts: [
+          ...imageParts.map(p => ({ inlineData: p.inlineData } as GeminiInlineDataPart)),
+          { text: prompt } as GeminiTextPart
+        ]
+      },
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: productAnalysisSchema,
+        temperature: 0.4,
       }
-    }
+    });
 
-    // GAS URL이 설정되어 있고 기본 데모 URL이 아니면 프록시 사용
-    if (gasUrl && gasUrl.trim() !== '' && !isDefaultUrl) {
-      // GAS 프록시 사용
-      const result = await callGeminiViaProxy({
-        model: MODEL_TEXT_VISION,
-        contents: {
-          parts: [
-            ...imageParts.map(p => ({ inlineData: p.inlineData } as GeminiInlineDataPart)),
-            { text: prompt } as GeminiTextPart
-          ]
-        },
-        config: {
-          responseMimeType: "application/json",
-          responseSchema: productAnalysisSchema,
-          temperature: 0.4,
-        }
-      });
-
-      const text = result.candidates?.[0]?.content?.parts?.[0]?.text;
-      if (!text) throw new Error("No response from Gemini");
-
-      const analysis = JSON.parse(text) as ProductAnalysis;
-
-      // 템플릿 모드: 템플릿 구조를 기반으로 강제 매핑 (100% 구조 유지)
-      if (template) {
-        return applyTemplateStructure(analysis, template, productData);
-      }
-
-      return analysis;
-    }
-
-    // GAS 프록시를 사용할 수 없는 경우
-    console.warn('[Gemini Service] GAS 프록시를 사용할 수 없습니다. Fallback으로 환경 변수 확인');
-    console.warn('[Gemini Service] 현재 GAS URL:', gasUrl);
-    console.warn('[Gemini Service] 기본 URL과 동일한지:', isDefaultUrl);
-
-    // GAS 프록시가 없으면 환경 변수에서 API 키 확인 (Fallback)
-    const apiKey = (window as any).__GEMINI_API_KEY__ ||
-      (import.meta.env?.VITE_GEMINI_API_KEY as string);
-
-    if (!apiKey) {
-      const errorMessage = isDefaultUrl
-        ? 'GAS 프록시가 설정되지 않았습니다.\n\n' +
-        '✅ Google Apps Script에 GEMINI_API_KEY를 스크립트 속성으로 설정하셨다면,\n' +
-        '   애플리케이션 설정에서 GAS Web App URL을 입력해주세요.\n\n' +
-        '   [설정 방법]\n' +
-        '   1. 우측 상단 ⚙️ 아이콘 클릭\n' +
-        '   2. "구글 시트 연동" 탭 선택\n' +
-        '   3. "Google Apps Script (GAS) Web App URL" 필드에\n' +
-        '      배포한 웹 앱 URL 입력\n' +
-        '   4. "설정 저장하기" 클릭\n\n' +
-        '   또는 환경 변수 사용:\n' +
-        '   - .env 파일에 VITE_GEMINI_API_KEY=your_key 추가'
-        : 'Gemini API 키가 설정되지 않았습니다.\n\n' +
-        '방법 1: GAS 프록시 사용 (권장)\n' +
-        '  - Google Apps Script에 GEMINI_API_KEY를 스크립트 속성으로 설정\n' +
-        '  - GAS Web App URL을 설정에 입력\n\n' +
-        '방법 2: 환경 변수 사용\n' +
-        '  - .env 파일에 VITE_GEMINI_API_KEY=your_key 추가';
-
-      throw new Error(errorMessage);
-    }
-
-    // 직접 API 호출 (Fallback)
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${MODEL_TEXT_VISION}:generateContent?key=${apiKey}`,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          contents: {
-            parts: [
-              ...imageParts, // Add all images
-              { text: prompt }
-            ]
-          },
-          generationConfig: {
-            responseMimeType: "application/json",
-            responseSchema: productAnalysisSchema,
-            temperature: 0.4,
-          }
-        })
-      }
-    );
-
-    if (!response.ok) {
-      const errorData = await response.text();
-      throw new Error(`Gemini API 오류: ${response.status} - ${errorData}`);
-    }
-
-    const result = await response.json();
     const text = result.candidates?.[0]?.content?.parts?.[0]?.text;
-
     if (!text) throw new Error("No response from Gemini");
 
     const analysis = JSON.parse(text) as ProductAnalysis;
@@ -2068,12 +1881,12 @@ High quality, professional product photography without text overlay.
       { text: imagePrompt } as GeminiTextPart
     ];
 
-    const gasUrl = getGasUrl(true);
-    const normalizedGasUrl = gasUrl ? normalizeUrlForComparison(gasUrl) : '';
-    const normalizedDefaultUrl = normalizeUrlForComparison(DEFAULT_GAS_URL);
-    const isDefaultUrl = normalizedGasUrl === normalizedDefaultUrl;
+    
+    
+    
+    
 
-    if (gasUrl && gasUrl.trim() !== '' && !isDefaultUrl) {
+    if (true) {
       // GAS 프록시 사용
       reportProgress('2단계', '이미지 생성 중... (시간이 다소 걸릴 수 있습니다)');
       // 이미지 생성은 시간이 오래 걸리므로 명시적으로 5분 타임아웃 적용
@@ -2378,102 +2191,45 @@ High quality, hyperrealistic, ultra photorealistic, shot on Canon EOS R5 with 85
     }
 
 
-    // GAS 프록시를 통한 호출 시도
-    const gasUrl = getGasUrl(true);
-
-    // URL 정규화 비교
-    const normalizedGasUrl = gasUrl ? normalizeUrlForComparison(gasUrl) : '';
-    const normalizedDefaultUrl = normalizeUrlForComparison(DEFAULT_GAS_URL);
-    const isDefaultUrl = normalizedGasUrl === normalizedDefaultUrl;
-
-    console.log('[Image Generate] 정규화된 기본 URL:', normalizedDefaultUrl);
-    console.log('[Image Generate] 기본 URL과 비교 (정규화 후):', isDefaultUrl);
-
-    // GAS URL이 설정되어 있고 기본 데모 URL이 아니면 프록시 사용
-    if (gasUrl && gasUrl.trim() !== '' && !isDefaultUrl) {
-      // ⭐ 안전 설정: 패션 모델 이미지 생성 시 과도한 필터링 방지
-      const imageGenSafetySettings: GeminiSafetySettings[] = [
-        {
-          category: "HARM_CATEGORY_SEXUALLY_EXPLICIT",
-          threshold: "BLOCK_ONLY_HIGH"
-        },
-        {
-          category: "HARM_CATEGORY_HATE_SPEECH",
-          threshold: "BLOCK_ONLY_HIGH"
-        },
-        {
-          category: "HARM_CATEGORY_HARASSMENT",
-          threshold: "BLOCK_ONLY_HIGH"
-        },
-        {
-          category: "HARM_CATEGORY_DANGEROUS_CONTENT",
-          threshold: "BLOCK_ONLY_HIGH"
-        }
-      ];
-
-      // ★ 라이프스타일 코디 섹션은 창의성 파라미터 상향 (색상 코디 섹션은 기존값 유지)
-      const isLifestyleDiversity = fullPrompt.includes('lifestyle styling series');
-      const genTemperature = isLifestyleDiversity ? 0.45 : 0.25;
-      const genTopK = isLifestyleDiversity ? 40 : 20;
-      if (isLifestyleDiversity) {
-        console.log(`[generateSectionImage] ★ 라이프스타일 다양성 모드: temperature=${genTemperature}, topK=${genTopK}`);
-      }
-
-      // GAS 프록시 사용
-      const result = await callGeminiViaProxy({
-        model: MODEL_IMAGE_GEN,
-        contents: { parts },
-        config: {
-          temperature: genTemperature,  // ★ 라이프스타일: 0.45 / 기본: 0.25
-          topK: genTopK                 // ★ 라이프스타일: 40 / 기본: 20
-        },
-        safetySettings: imageGenSafetySettings
-      });
-
-      for (const part of result.candidates?.[0]?.content?.parts || []) {
-        if (part.inlineData) {
-          return `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`;
-        }
-      }
-
-      throw new Error("No image generated");
-    }
-
-    // GAS 프록시가 없으면 환경 변수에서 API 키 확인 (Fallback)
-    const apiKey = (window as any).__GEMINI_API_KEY__ ||
-      (import.meta.env?.VITE_GEMINI_API_KEY as string);
-
-    if (!apiKey) {
-      throw new Error(
-        'Gemini API 키가 설정되지 않았습니다.\n\n' +
-        '방법 1: GAS 프록시 사용 (권장)\n' +
-        '  - Google Apps Script에 GEMINI_API_KEY를 스크립트 속성으로 설정\n' +
-        '  - GAS Web App URL을 설정에 입력\n\n' +
-        '방법 2: 환경 변수 사용\n' +
-        '  - .env 파일에 VITE_GEMINI_API_KEY=your_key 추가'
-      );
-    }
-
-    // 직접 API 호출 (Fallback)
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${MODEL_IMAGE_GEN}:generateContent?key=${apiKey}`,
+    // ⭐ 안전 설정: 패션 모델 이미지 생성 시 과도한 필터링 방지
+    const imageGenSafetySettings: GeminiSafetySettings[] = [
       {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          contents: { parts }
-        })
+        category: "HARM_CATEGORY_SEXUALLY_EXPLICIT",
+        threshold: "BLOCK_ONLY_HIGH"
+      },
+      {
+        category: "HARM_CATEGORY_HATE_SPEECH",
+        threshold: "BLOCK_ONLY_HIGH"
+      },
+      {
+        category: "HARM_CATEGORY_HARASSMENT",
+        threshold: "BLOCK_ONLY_HIGH"
+      },
+      {
+        category: "HARM_CATEGORY_DANGEROUS_CONTENT",
+        threshold: "BLOCK_ONLY_HIGH"
       }
-    );
+    ];
 
-    if (!response.ok) {
-      const errorData = await response.text();
-      throw new Error(`Gemini API 오류: ${response.status} - ${errorData}`);
+    // ★ 라이프스타일 코디 섹션은 창의성 파라미터 상향 (색상 코디 섹션은 기존값 유지)
+    const isLifestyleDiversity = fullPrompt.includes('lifestyle styling series');
+    const genTemperature = isLifestyleDiversity ? 0.45 : 0.25;
+    const genTopK = isLifestyleDiversity ? 40 : 20;
+
+    if (isLifestyleDiversity) {
+      console.log(`[generateSectionImage] ★ 라이프스타일 다양성 모드: temperature=${genTemperature}, topK=${genTopK}`);
     }
 
-    const result = await response.json();
+    // Firebase 프록시 사용
+    const result = await callGeminiViaProxy({
+      model: MODEL_IMAGE_GEN,
+      contents: { parts },
+      config: {
+        temperature: genTemperature,
+        topK: genTopK
+      },
+      safetySettings: imageGenSafetySettings
+    });
 
     for (const part of result.candidates?.[0]?.content?.parts || []) {
       if (part.inlineData) {
@@ -2644,28 +2400,22 @@ Focus on:
 Return ONLY the description in 1-2 sentences, no explanation.
 Example: "A soft pink fluffy fleece baby outfit set with bear face embroidery, ribbed cuffs and waistband"`;
 
-    const gasUrl = getGasUrl(true);
+    // Firebase 프록시 사용
+    const result = await callGeminiViaProxy({
+      model: MODEL_TEXT_VISION,
+      contents: {
+        parts: [
+          { inlineData: { mimeType, data: base64Image } } as GeminiInlineDataPart,
+          { text: analysisPrompt } as GeminiTextPart
+        ]
+      },
+      config: {
+        temperature: 0.2,
+      }
+    });
 
-    if (gasUrl && gasUrl.trim() !== '') {
-      const result = await callGeminiViaProxy({
-        model: MODEL_TEXT_VISION,
-        contents: {
-          parts: [
-            { inlineData: { mimeType, data: base64Image } } as GeminiInlineDataPart,
-            { text: analysisPrompt } as GeminiTextPart
-          ]
-        },
-        config: {
-          temperature: 0.2,
-        }
-      });
-
-      const text = result.candidates?.[0]?.content?.parts?.[0]?.text;
-      return text?.trim() || 'the product';
-    }
-
-    // Fallback
-    return 'the product in the reference image';
+    const text = result.candidates?.[0]?.content?.parts?.[0]?.text;
+    return text?.trim() || 'the product';
   } catch (error) {
     console.warn('[analyzeProductForEnhancement] Analysis failed, using fallback:', error);
     return 'the product in the reference image';
@@ -2692,34 +2442,28 @@ Maintain all visual details: shape, color, texture, design elements, logos, stit
     { inlineData: { mimeType: referenceMimeType, data: referenceBase64 } } as GeminiInlineDataPart
   ];
 
-  const gasUrl = getGasUrl(true);
+  const imageGenSafetySettings: GeminiSafetySettings[] = [
+    { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_NONE" },
+    { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_NONE" },
+    { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_NONE" },
+    { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_NONE" }
+  ];
 
-  if (gasUrl && gasUrl.trim() !== '') {
-    const imageGenSafetySettings: GeminiSafetySettings[] = [
-      { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_NONE" },
-      { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_NONE" },
-      { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_NONE" },
-      { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_NONE" }
-    ];
+  const result = await callGeminiViaProxy({
+    model: MODEL_IMAGE_GEN,
+    contents: { parts },
+    config: {
+      temperature: 0.4,
+      topK: 32
+    },
+    safetySettings: imageGenSafetySettings
+  });
 
-    const result = await callGeminiViaProxy({
-      model: MODEL_IMAGE_GEN,
-      contents: { parts },
-      config: {
-        temperature: 0.4,
-        topK: 32
-      },
-      safetySettings: imageGenSafetySettings
-    });
-
-    for (const part of result.candidates?.[0]?.content?.parts || []) {
-      if (part.inlineData) {
-        return `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`;
-      }
+  for (const part of result.candidates?.[0]?.content?.parts || []) {
+    if (part.inlineData) {
+      return `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`;
     }
-
-    throw new Error("No image generated from enhancement");
   }
 
-  throw new Error("GAS 프록시가 설정되지 않았습니다.");
+  throw new Error("No image generated from enhancement");
 };

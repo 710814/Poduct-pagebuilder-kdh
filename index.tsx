@@ -15,7 +15,6 @@ if (!rootElement) {
   throw new Error("Could not find root element to mount to");
 }
 
-// 에러 핸들링 추가
 try {
   console.log('ReactDOM.createRoot 호출 시작');
   const root = ReactDOM.createRoot(rootElement);

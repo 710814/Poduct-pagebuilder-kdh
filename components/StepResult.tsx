@@ -1,12 +1,8 @@
 import React, { useState, useCallback } from 'react';
 import { ProductAnalysis, AppMode, UploadedFile } from '../types';
-import { Download, Code, CheckCircle, ExternalLink, Table, Loader2, RefreshCw, Settings, X, MessageSquare, Image as ImageIcon, Eye, ArrowLeft, Home, Copy, Upload } from 'lucide-react';
-import { saveToFirebase, openFirebaseConsole, generateCSV, isFirebaseConnected } from '../services/firebaseService';
+import { Code, CheckCircle, Loader2, RefreshCw, X, MessageSquare, Image as ImageIcon, Eye, ArrowLeft, Home, Copy, Upload, Download } from 'lucide-react';
 import { generateSectionImage } from '../services/geminiService';
 import { useToastContext } from '../contexts/ToastContext';
-import JSZip from 'jszip';
-import { saveAs } from 'file-saver';
-import { toPng } from 'html-to-image';
 
 interface Props {
   data: ProductAnalysis;
@@ -16,11 +12,10 @@ interface Props {
   uploadedFiles: UploadedFile[];
   onUpdate: (data: ProductAnalysis) => void;
   onOpenSettings: () => void;
+  autoSaveStatus: 'idle' | 'saving' | 'saved' | 'error';
 }
 
-export const StepResult: React.FC<Props> = ({ data, onRestart, onGoBack, mode, uploadedFiles, onUpdate, onOpenSettings }) => {
-  const [isSaving, setIsSaving] = useState(false);
-  const [saveType, setSaveType] = useState<'sheet' | 'drive' | 'image' | null>(null);
+export const StepResult: React.FC<Props> = ({ data, onRestart, onGoBack, mode, uploadedFiles, onUpdate, autoSaveStatus }) => {
   const [regeneratingId, setRegeneratingId] = useState<string | null>(null);
   const toast = useToastContext();
 
@@ -394,148 +389,6 @@ export const StepResult: React.FC<Props> = ({ data, onRestart, onGoBack, mode, u
     URL.revokeObjectURL(url);
   };
 
-  // Google Drive용 ZIP 파일 생성 및 다운로드
-  const handleDriveSave = async () => {
-    setIsSaving(true);
-    setSaveType('drive');
-    try {
-      const zip = new JSZip();
-
-      const infoContent = `상품명: ${data.productName}
-카테고리: ${data.detectedCategory}
-모드: ${mode === AppMode.CREATION ? '생성(Creation)' : '현지화(Localization)'}
-생성일시: ${new Date().toLocaleString()}
-
-[주요 특징]
-${data.mainFeatures.map(f => `- ${f}`).join('\n')}
-
-[마케팅 카피]
-${data.marketingCopy}
-      `;
-      zip.file("product_info.txt", infoContent);
-
-      const imgFolder = zip.folder("images");
-      if (imgFolder) {
-        data.sections.forEach((section) => {
-          // 단일 이미지 저장
-          if (section.imageUrl) {
-            const base64Data = section.imageUrl.split(',')[1];
-            if (base64Data) {
-              imgFolder.file(`section_${section.id}.png`, base64Data, { base64: true });
-            }
-          }
-
-          // 그리드 이미지 저장
-          if ((section.layoutType === 'grid-1' || section.layoutType === 'grid-2' || section.layoutType === 'grid-3') && section.imageSlots) {
-            section.imageSlots.forEach((slot, idx) => {
-              if (slot.imageUrl) {
-                const base64Data = slot.imageUrl.split(',')[1];
-                if (base64Data) {
-                  imgFolder.file(`section_${section.id}_slot_${idx}.png`, base64Data, { base64: true });
-                }
-              }
-            });
-          }
-        });
-      }
-
-      const htmlContent = generateHTML();
-      zip.file("index.html", htmlContent);
-
-      const content = await zip.generateAsync({ type: "blob" });
-      saveAs(content, `[Gemini]_${data.productName.replace(/\s+/g, '_')}_package.zip`);
-
-      toast.success("📦 드라이브 업로드용 패키지(ZIP)가 생성되었습니다. 구글 드라이브에 이 파일을 업로드하세요.");
-    } catch (e) {
-      console.error(e);
-      toast.error("파일 생성 중 오류가 발생했습니다.");
-    } finally {
-      setIsSaving(false);
-      setSaveType(null);
-    }
-  };
-
-  // 구글 시트 데이터 저장 (GAS 연동 + CSV 다운로드 Fallback)
-  const handleSheetSave = async () => {
-    setIsSaving(true);
-    setSaveType('sheet');
-
-    try {
-      // 1. Firebase 데이터베이스 및 스토리지 연동 시도
-      try {
-        const isConnected = isFirebaseConnected();
-
-        if (!isConnected) {
-          const confirmSettings = window.confirm(
-            "⚠️ 주의: Firebase 백엔드가 설정되지 않았습니다.\n\n" +
-            "회원님의 템플릿과 데이터를 저장하려면 [설정]에서\n" +
-            "백엔드 연결 상태를 확인해야 합니다.\n\n" +
-            "설정 창으로 이동하시겠습니까?"
-          );
-          if (confirmSettings) {
-            onOpenSettings(); // 공통 설정 모달 열기
-            throw new Error("SETTINGS_OPENED");
-          }
-        }
-
-        if (isConnected) {
-          console.log("Starting full data upload to Firebase...");
-
-          await saveToFirebase(data, mode);
-
-          toast.success(
-            '✅ 저장 성공!\n\n' +
-            '1. Firestore 데이터베이스에 텍스트 데이터가 저장되었습니다.\n' +
-            '2. Firebase Storage에 상품명으로 폴더가 생성되었습니다.\n' +
-            '3. 생성된 이미지가 Storage 폴더에 저장되었습니다.',
-            8000
-          );
-
-          // 콘솔 열기 확인
-          setTimeout(() => {
-            if (window.confirm('Firebase 콘솔을 열어 저장된 데이터를 확인하시겠습니까?')) {
-              openFirebaseConsole();
-            }
-          }, 500);
-
-          return;
-        }
-      } catch (e: any) {
-        if (e instanceof Error && e.message === "SETTINGS_OPENED") {
-          return;
-        } else if (e instanceof Error && e.message === "URL_NOT_SET") {
-          // Fallthrough to CSV
-        } else {
-          console.error('GAS Error', e);
-          if (e instanceof Error && e.message === 'IMAGE_SIZE_TOO_LARGE') {
-            toast.warning('⚠️ 이미지 용량이 너무 커서 텍스트 데이터만 저장되었습니다. (구글 드라이브 이미지 저장은 건너뛰었습니다.)', 8000);
-          } else {
-            toast.error(
-              '구글 시트 전송 중 문제가 발생했습니다.\n\n' +
-              '[체크사항]\n' +
-              '1. GAS 스크립트가 최신 버전("GOOGLE_APPS_SCRIPT_CODE.js")인지 확인하세요.\n' +
-              '2. [설정] 메뉴의 웹 앱 URL이 정확한지 확인하세요.\n\n' +
-              '데이터 보존을 위해 CSV 파일로 다운로드합니다.',
-              10000
-            );
-          }
-        }
-      }
-
-      // 2. CSV 다운로드 (Fallback)
-      const csvContent = generateCSV(data, mode);
-      const blob = new Blob([new Uint8Array([0xEF, 0xBB, 0xBF]), csvContent], { type: 'text/csv;charset=utf-8;' });
-      saveAs(blob, `[DATA]_${data.productName}_sheet.csv`);
-      toast.info('CSV 파일로 다운로드되었습니다.');
-
-    } catch (e) {
-      toast.error('저장 처리 중 오류가 발생했습니다.');
-    } finally {
-      setIsSaving(false);
-      setSaveType(null);
-    }
-  };
-
   // 1. 재생성 모달 열기
   const handleOpenRegenModal = (sectionId: string, currentPrompt: string) => {
     setEditModal({
@@ -581,152 +434,6 @@ ${data.marketingCopy}
     }
   };
 
-  // Google Fonts CSS를 fetch하여 @font-face를 Base64 인라인화하는 유틸 함수
-  const inlineGoogleFonts = async (fontCssUrl: string): Promise<string> => {
-    try {
-      // 1. Google Fonts CSS를 fetch (woff2 포맷을 받기 위해 User-Agent 지정)
-      const cssResponse = await fetch(fontCssUrl, {
-        headers: {
-          // Chrome UA를 보내야 woff2 포맷의 @font-face를 반환
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-        }
-      });
-
-      if (!cssResponse.ok) {
-        console.warn('[Font Inline] Google Fonts CSS fetch 실패:', cssResponse.status);
-        return '';
-      }
-
-      let cssText = await cssResponse.text();
-
-      // 2. CSS 내의 모든 url() 참조를 찾아 Base64 data URI로 변환
-      const urlRegex = /url\((https?:\/\/[^)]+)\)/g;
-      const urlMatches = [...cssText.matchAll(urlRegex)];
-
-      for (const match of urlMatches) {
-        const fontUrl = match[1];
-        try {
-          const fontResponse = await fetch(fontUrl);
-          if (fontResponse.ok) {
-            const fontBlob = await fontResponse.blob();
-            const base64 = await new Promise<string>((resolve, reject) => {
-              const reader = new FileReader();
-              reader.onloadend = () => resolve(reader.result as string);
-              reader.onerror = reject;
-              reader.readAsDataURL(fontBlob);
-            });
-            cssText = cssText.replace(fontUrl, base64);
-          }
-        } catch (fontErr) {
-          console.warn('[Font Inline] 폰트 파일 fetch 실패:', fontUrl, fontErr);
-        }
-      }
-
-      return cssText;
-    } catch (err) {
-      console.warn('[Font Inline] Google Fonts 인라인화 실패:', err);
-      return '';
-    }
-  };
-
-  // 새창 미리보기 HTML을 이미지로 저장
-  const handleSavePreviewAsImage = async () => {
-    setIsSaving(true);
-    setSaveType('image');
-
-    try {
-      // 1. Google Fonts CSS를 미리 인라인화 (CORS 우회)
-      const fontCssUrl = 'https://fonts.googleapis.com/css2?family=Nanum+Brush+Script&family=Noto+Sans+KR:wght@300;400;500;700&display=swap';
-      const inlinedFontCss = await inlineGoogleFonts(fontCssUrl);
-
-      // 2. HTML 생성
-      const html = generateHTMLForPreview();
-
-      // 3. 숨겨진 iframe 생성 (미리보기 뱃지 제거한 버전)
-      let htmlWithoutBadge = html.replace('<div class="preview-badge">🔍 미리보기</div>', '');
-
-      // 4. 인라인 폰트 CSS를 HTML에 삽입 (기존 <link> 태그 바로 뒤에)
-      if (inlinedFontCss) {
-        const inlineFontStyle = `<style data-inlined-fonts="true">\n${inlinedFontCss}\n</style>`;
-        // 기존 Google Fonts <link> 태그 뒤에 인라인 스타일 삽입
-        htmlWithoutBadge = htmlWithoutBadge.replace(
-          /<link href="https:\/\/fonts\.googleapis\.com[^"]*"[^>]*>/,
-          (match) => `${match}\n${inlineFontStyle}`
-        );
-      }
-
-      const iframe = document.createElement('iframe');
-      iframe.style.cssText = 'position:fixed; left:-9999px; top:0; width:840px; border:none;';
-      document.body.appendChild(iframe);
-
-      // 5. HTML 렌더링
-      const iframeDoc = iframe.contentDocument || iframe.contentWindow?.document;
-      if (!iframeDoc) {
-        throw new Error('iframe document not accessible');
-      }
-      iframeDoc.open();
-      iframeDoc.write(htmlWithoutBadge);
-      iframeDoc.close();
-
-      // 6. 폰트 로드 완료 대기 (document.fonts.ready + fallback timeout)
-      try {
-        const iframeWindow = iframe.contentWindow;
-        if (iframeWindow?.document?.fonts) {
-          await Promise.race([
-            iframeWindow.document.fonts.ready,
-            new Promise(resolve => setTimeout(resolve, 5000)) // 5초 fallback timeout
-          ]);
-          console.log('[Image Save] 폰트 로딩 완료 (fonts.ready)');
-        } else {
-          await new Promise(resolve => setTimeout(resolve, 3000));
-          console.log('[Image Save] fonts API 미지원, 3초 대기 완료');
-        }
-      } catch {
-        await new Promise(resolve => setTimeout(resolve, 3000));
-        console.log('[Image Save] 폰트 대기 중 오류, 3초 fallback 대기 완료');
-      }
-
-      // 7. 추가 렌더링 안정화 대기
-      await new Promise(resolve => setTimeout(resolve, 500));
-
-      // 8. 컨테이너 요소 찾기
-      const container = iframeDoc.querySelector('.container') as HTMLElement;
-      if (!container) {
-        throw new Error('Container element not found');
-      }
-
-      // 9. iframe 높이를 컨텐츠에 맞게 조정
-      iframe.style.height = `${container.scrollHeight + 100}px`;
-      await new Promise(resolve => setTimeout(resolve, 300));
-
-      // 10. 이미지로 캡처 (skipFonts: false - 인라인화된 폰트 사용)
-      const dataUrl = await toPng(container, {
-        quality: 1.0,
-        pixelRatio: 1,
-        backgroundColor: '#ffffff',
-        cacheBust: true,
-        skipFonts: false,  // 인라인화된 폰트를 포함하여 캡처
-      });
-
-      // 11. 다운로드 트리거
-      const link = document.createElement('a');
-      link.download = `${data.productName.replace(/\s+/g, '_')}_preview.png`;
-      link.href = dataUrl;
-      link.click();
-
-      // 12. 정리
-      document.body.removeChild(iframe);
-
-      toast.success('미리보기가 이미지로 저장되었습니다.');
-    } catch (error) {
-      console.error('이미지 저장 실패:', error);
-      toast.error('이미지 저장 중 오류가 발생했습니다. 다시 시도해주세요.');
-    } finally {
-      setIsSaving(false);
-      setSaveType(null);
-    }
-  };
-
   return (
     <div className="max-w-6xl mx-auto px-4 py-8 relative">
       <div className="flex flex-col md:flex-row justify-between items-center mb-8 gap-4">
@@ -747,25 +454,6 @@ ${data.marketingCopy}
             새 창 미리보기
           </button>
 
-          {/* 이미지 저장 버튼 */}
-          <button
-            onClick={handleSavePreviewAsImage}
-            disabled={isSaving}
-            className={`flex items-center px-4 py-2 text-white rounded-lg transition-colors disabled:opacity-50 ${isSaving && saveType === 'image' ? 'bg-orange-700' : 'bg-orange-500 hover:bg-orange-600'}`}
-          >
-            {isSaving && saveType === 'image' ? (
-              <>
-                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                저장 중...
-              </>
-            ) : (
-              <>
-                <ImageIcon className="w-4 h-4 mr-2" />
-                이미지 저장
-              </>
-            )}
-          </button>
-
           <button
             onClick={downloadHtml}
             className="flex items-center px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-colors"
@@ -774,45 +462,19 @@ ${data.marketingCopy}
             HTML 다운로드
           </button>
 
-          <div className="flex items-center gap-1">
-            <button
-              onClick={handleSheetSave}
-              disabled={isSaving}
-              className={`flex items-center px-4 py-2 text-white rounded-l-lg transition-colors disabled:opacity-50 min-w-[160px] justify-center ${isSaving && saveType === 'sheet' ? 'bg-green-700' : 'bg-green-600 hover:bg-green-700'}`}
-            >
-              {isSaving && saveType === 'sheet' ? (
-                <>
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  업로드 중...
-                </>
-              ) : (
-                <>
-                  <Table className="w-4 h-4 mr-2" />
-                  DB/이미지 저장
-                </>
-              )}
-            </button>
-            <button
-              onClick={onOpenSettings}
-              className="bg-green-700 hover:bg-green-800 text-white p-2 rounded-r-lg h-full transition-colors relative"
-              title="구글 시트 연동 설정 (URL/ID 변경)"
-            >
-              <Settings className="w-5 h-5" />
-              {/* 설정 알림 도트: URL이 기본값이면 빨간 점 표시 */}
-              {getGasUrl() === DEFAULT_GAS_URL && (
-                <span className="absolute top-1 right-1 w-2.5 h-2.5 bg-red-400 border-2 border-green-700 rounded-full"></span>
-              )}
-            </button>
-          </div>
-
-          <button
-            onClick={handleDriveSave}
-            disabled={isSaving}
-            className={`flex items-center px-4 py-2 text-white rounded-lg transition-colors disabled:opacity-50 ${isSaving && saveType === 'drive' ? 'bg-blue-700' : 'bg-blue-600 hover:bg-blue-700'}`}
-          >
-            {isSaving && saveType === 'drive' ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <ExternalLink className="w-4 h-4 mr-2" />}
-            Drive 패키지(ZIP)
-          </button>
+          {/* 자동 저장 상태 표시 */}
+          {autoSaveStatus === 'saving' && (
+            <div className="flex items-center gap-1.5 px-3 py-2 text-sm text-gray-500 bg-gray-100 rounded-lg">
+              <Loader2 className="w-4 h-4 animate-spin" />
+              갤러리에 저장 중...
+            </div>
+          )}
+          {autoSaveStatus === 'saved' && (
+            <div className="flex items-center gap-1.5 px-3 py-2 text-sm text-green-600 bg-green-50 rounded-lg">
+              <CheckCircle className="w-4 h-4" />
+              갤러리에 저장됨
+            </div>
+          )}
         </div>
       </div>
 

@@ -31,14 +31,14 @@ const getBadgeInfo = (section: SectionData) => {
         };
     }
 
-    if (layoutType === 'grid-1') {
+    if (layoutType as string === 'grid-1') {
         return { icon: Rows3, label: '3행 그리드', color: 'bg-teal-50 border-teal-200 text-teal-600' };
     }
 
-    if (slotCount >= 3 && layoutType !== 'grid-1') {
+    if (slotCount >= 3 && (layoutType as string) !== 'grid-1') {
         return { icon: LayoutGrid, label: '3열', color: 'bg-emerald-50 border-emerald-200 text-emerald-600' };
     }
-    if (slotCount === 2 && layoutType !== 'grid-1') {
+    if (slotCount === 2 && (layoutType as string) !== 'grid-1') {
         return { icon: LayoutGrid, label: '2열', color: 'bg-green-50 border-green-200 text-green-600' };
     }
 
@@ -138,7 +138,7 @@ export const SectionMiniMap: React.FC<SectionMiniMapProps> = ({
                             {/* 호버 액션 버튼 (복원) */}
                             <div className="absolute right-2 flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity bg-white/80 backdrop-blur-[2px] rounded-lg p-1 shadow-sm border border-gray-100">
                                 <button
-                                    onClick={(e) => { e.stopPropagation(); onMoveSection(i, 'up'); }}
+                                    onClick={(e) => { e.preventDefault(); e.stopPropagation(); onMoveSection(i, 'up'); }}
                                     disabled={i === 0}
                                     className="p-1 hover:bg-gray-100 rounded text-gray-400 hover:text-gray-600 disabled:opacity-30"
                                     title="위로"
@@ -146,7 +146,7 @@ export const SectionMiniMap: React.FC<SectionMiniMapProps> = ({
                                     <MoveUp className="w-3.5 h-3.5" />
                                 </button>
                                 <button
-                                    onClick={(e) => { e.stopPropagation(); onMoveSection(i, 'down'); }}
+                                    onClick={(e) => { e.preventDefault(); e.stopPropagation(); onMoveSection(i, 'down'); }}
                                     disabled={i === sections.length - 1}
                                     className="p-1 hover:bg-gray-100 rounded text-gray-400 hover:text-gray-600 disabled:opacity-30"
                                     title="아래로"
@@ -155,7 +155,7 @@ export const SectionMiniMap: React.FC<SectionMiniMapProps> = ({
                                 </button>
                                 {onDeleteSection && (
                                     <button
-                                        onClick={(e) => { e.stopPropagation(); onDeleteSection(i); }}
+                                        onClick={(e) => { e.preventDefault(); e.stopPropagation(); onDeleteSection(i); }}
                                         className="p-1 hover:bg-red-50 rounded text-gray-400 hover:text-red-500"
                                         title="삭제"
                                     >

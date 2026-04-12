@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { X, Table, LayoutTemplate, Plus, Trash2, Loader2, Save, Check, Info, Edit2, ArrowUp, ArrowDown, ChevronLeft, ChevronDown, ChevronUp, Layout, FileText, Image as ImageIcon, Upload, ToggleLeft, ToggleRight, Type, Cloud, CloudOff, RefreshCw, Layers, Star } from 'lucide-react';
-import { getGasUrl, setGasUrl as saveGasUrl, getSheetId, setSheetId as saveSheetId, DEFAULT_GAS_URL } from '../services/googleSheetService';
+import { isFirebaseConnected } from '../services/firebaseService';
 import { getTemplates, saveTemplate, deleteTemplate, getDefaultTemplateId, setDefaultTemplateId, createNewTemplate as createNewTemplateService } from '../services/templateService';
 import { CATEGORY_OPTIONS } from '../services/categoryPresets';
 import { extractTemplateFromImage, fileToGenerativePart, getImageSlotCountForLayout } from '../services/geminiService';
@@ -294,13 +294,9 @@ export const SettingsModal: React.FC<Props> = ({ isOpen, onClose }) => {
       applyRestoredSettings(result.settings);
 
       // UI 상태 업데이트
-      if (result.settings.gasUrl) {
-        setGasUrlState(result.settings.gasUrl);
-      }
-      if (result.settings.sheetId) {
-        setSheetIdState(result.settings.sheetId);
-      }
-      setTemplates(getTemplates());
+      
+      
+      setTemplates(await getTemplates());
 
       const backupDateStr = result.settings.backupDate
         ? new Date(result.settings.backupDate).toLocaleString('ko-KR')
@@ -323,7 +319,7 @@ export const SettingsModal: React.FC<Props> = ({ isOpen, onClose }) => {
       const newTemplate = await extractTemplateFromImage(base64, mimeType);
 
       saveTemplate(newTemplate);
-      setTemplates(getTemplates());
+      setTemplates(await getTemplates());
       toast.success(`'${newTemplate.name}' 템플릿이 추가되었습니다!`);
 
     } catch (error) {
@@ -336,11 +332,11 @@ export const SettingsModal: React.FC<Props> = ({ isOpen, onClose }) => {
     }
   };
 
-  const handleDeleteTemplate = (e: React.MouseEvent, id: string) => {
+  const handleDeleteTemplate = async (e: React.MouseEvent, id: string) => {
     e.stopPropagation();
     if (confirm('정말 이 템플릿을 삭제하시겠습니까?')) {
       deleteTemplate(id);
-      setTemplates(getTemplates());
+      setTemplates(await getTemplates());
     }
   };
 
@@ -351,14 +347,14 @@ export const SettingsModal: React.FC<Props> = ({ isOpen, onClose }) => {
     setEditingTemplate(JSON.parse(JSON.stringify(template)));
   };
 
-  const saveEditing = () => {
+  const saveEditing = async () => {
     if (editingTemplate) {
       const updatedTemplate = {
         ...editingTemplate,
         updatedAt: Date.now()
       };
       saveTemplate(updatedTemplate);
-      setTemplates(getTemplates());
+      setTemplates(await getTemplates());
       setEditingTemplate(null);
       setIsCreatingNew(false); // 초기화
     }
@@ -499,7 +495,7 @@ export const SettingsModal: React.FC<Props> = ({ isOpen, onClose }) => {
       if (layoutType.startsWith('collage-')) {
         // 콜라주는 1개의 슬롯만 사용 (합성된 이미지) - 기존 프롬프트 보존 노력
         if (newImageSlots.length === 0) {
-          newImageSlots = [{ id: Date.now().toString(), slotType: 'main', prompt: currentSection.imagePrompt || '' }];
+          newImageSlots = [{ id: Date.now().toString(), slotType: 'hero', prompt: currentSection.imagePrompt || '' }];
         } else if (newImageSlots.length > 1) {
           newImageSlots = [newImageSlots[0]]; // 첫 번째 슬롯만 유지
         }

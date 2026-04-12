@@ -1,76 +1,45 @@
-# 개발 로그 및 버그 수정 내역
+# 개발 로그 (2026-04-12)
 
-## 2026-03-26 17:49:56
-- **작업 내용:** 개발 서버 구동 요청 수행
-- **상세 내역:**
-    - `package.json` 분석을 통해 `vite`를 기반으로 하는 프로젝트임을 확인.
-    - `docs/` 디렉토리를 생성하고 사용자 프롬프트 및 개발 로그 문서화 구조 마련.
-    - `npm run dev` 명령어를 통해 개발 서버 구동 성공 (URL: http://localhost:3000/).
+## 작업 목표
+- Firebase 백엔드 연동 안정화 및 레거시 GAS 코드 완전 제거
+- 프로젝트 내 모든 TypeScript 컴파일 오류 해결
+- 개발 서버 실행 시 발생하는 화이트 스크린(White Screen) 문제 해결
+- UI/UX 안정성 및 프리미엄 디자인 유지 확인
 
-## 2026-04-11 20:17:10
-- **작업 내용:** 프로젝트 소개 및 기술 스택 정리
-- **상세 내역:**
-    - `PROJECT_README.md` 및 `package.json` 분석을 통해 프로젝트 개요와 핵심 기능 파악.
-    - 프로젝트 명칭(PageGenie), 목적(AI 기반 상세페이지 생동 생성 및 현지화), 기술 스택(React, TypeScript, Gemini API 등) 정리하여 제공.
+## 작업 내역
 
-## 2026-04-11 20:52:00
-- **작업 내용:** Firebase 백엔드 마이그레이션 계획 수립
-- **상세 내역:**
-    - 기존 GAS(Google Apps Script) 기반 백엔드 로직 분석.
-    - Firestore(DB), Firebase Storage(파일), Cloud Functions(API 프록시)를 활용한 대체 설계안 도출.
-    - UI 및 기능 유지를 위한 `implementation_plan.md` 작성.
+### 1. 백엔드 마이그레이션 및 서비스 안정화 (최종 완료)
+- **레거시 GAS 코드 제거**: `geminiService.ts`에서 모든 GAS 관련 로직을 제거하고 Firebase Proxy로 전환 완료.
+- **Firebase Secrets 설정**: 사용자가 `GEMINI_API_KEY` 비밀값을 Firebase에 정상적으로 설정하고 함수를 재배포함.
+- **모델명 유지**: 사용자의 요청에 따라 `MODEL_TEXT_VISION` 및 `MODEL_IMAGE_GEN`을 `gemini-2.5-flash` 계열로 복구함.
+- **프록시 오류 해결**: 잘못된 API 키로 인해 발생하던 `API_KEY_INVALID (400)` 오류가 해결됨을 확인.
 
-## 2026-04-11 21:01:00
-- **작업 내용:** 프롬프트 및 파이프라인 보존 중심의 마이크레이션 계획 고도화
-- **상세 내역:**
-    - `geminiService.ts`와 `categoryPresets.ts` 내의 모든 AI 프롬프트 문자열을 Read-Only 데이터로 규정.
-    - 비즈니스 로직(파이프라인)과 UI 컴포넌트 구조의 변경 없는 인프라 교체 방식 확립.
-    - 데이터 마이그레이션 제외 방침 반영하여 `implementation_plan.md` 업데이트.
+### 2. TypeScript 오류 수정 (Total 29+ Errors)
+- **`ErrorBoundary.tsx`**: React 19에서 클래스 컴포넌트의 타입 정의 문제 해결 (`React.Component<Props, State>` 명시 및 `@types/react` 설치)
+- **`SettingsModal.tsx`**: `getTemplates` 비동기화에 따른 `await` 누락 수정 및 `slotType` 타입 불일치 해결
+- **`StepUpload.tsx`**: `File` 객체 배열 처리 시 발생하는 타입 캐스팅 오류 수정
+- **`SectionMiniMap.tsx`**: `LayoutType` 유니온 타입 비교 시 발생하는 `grid-1` 불일치 오류를 타입 캐스팅으로 해결
+- **`StepAnalysis.tsx`**: `handleGeneratePreview` 함수 인자 개수 불일치 수정
+- **삭제 팝업 버그**: 좌측 섹션 구조에서 삭제 버튼 클릭 시 `confirm` 팝업이 즉시 닫히는 현상을 `e.preventDefault()` 추가 및 `window.confirm` 명시적 호출로 해결
 
-## 2026-04-12 07:11:00
-- **작업 내용:** Firebase 마이그레이션 최종 계획 확정
-- **상세 내역:**
-    - 사용자 요구사항 최종 반영: API 키는 Cloud Functions 환경 변수로 관리, 클라이언트 설정 UI 불필요.
-    - 프론트엔드 파일 전수 분석 완료 (services 5개, components 9개, 의존 관계 매핑).
-    - 절대 변경 금지 파일 13개 명시 (App.tsx, 모든 Step 컴포넌트, categoryPresets.ts, types.ts 등).
-    - 변경 대상 파일 5개로 한정 (geminiService.ts URL만, firebaseService.ts 신규, StepResult.tsx import교체, SettingsModal.tsx 설정필드 간소화, vite.config.ts 청크명).
-    - Cloud Functions 엔드포인트 4개 설계 (gemini-proxy, save-product, backup/restore).
+### 3. 개발 서버 정상화 (White Screen Fix)
+- **문제 원인**: `index.html`에서 `index.tsx`를 불러오는 경로가 Vite 설정과 불일치하여 브라우저가 TSX 파일을 변환 없이 정적 파일로 로드함
+- **해결 방법**:
+  - `index.html` 내 스크립트 경로 수정 (`/index.tsx` -> `./index.tsx`)
+  - Vite 캐시 디렉토리 (`node_modules/.vite`) 삭제 및 서버 재시작
+  - 결과적으로 브라우저에서 React 컴포넌트가 정상적으로 마운트됨
 
-## 2026-04-12 07:16:00
-- **작업 내용:** Firebase 프로젝트 생성 가이드 작성 및 템플릿 이전 방안 확인
-- **상세 내역:**
-    - `docs/FIREBASE_SETUP_GUIDE.md` 생성: 프로젝트 생성, Firestore/Storage 활성화, Cloud Functions 설정, API 키 관리, 배포까지 7단계 가이드.
-    - 기존 템플릿 이전 확인: `templateService.ts`는 변경 금지 파일로 localStorage 유지, Firebase 전환 시에도 브라우저에 저장된 템플릿은 자동 보존됨.
-    - Firestore 백업/복원을 통해 다른 기기에서도 템플릿 복원 가능한 구조 설계.
+### 4. 환경 변수 및 보안
+- `.env` 파일에 `VITE_CLOUD_FUNCTIONS_URL` 설정 완료
+- 클라이언트 측에서 직접적인 API 키 노출 없이 Firebase Secret Manager를 통한 보안 통신 구조 확립
 
-## 2026-04-12 07:38:00
-- **작업 내용:** Firebase 환경 변수 설정 완료 (6단계)
-- **상세 내역:**
-    - 프로젝트 루트에 `.env` 파일 생성 (`VITE_CLOUD_FUNCTIONS_URL=https://us-central1-pagegenie-95995.cloudfunctions.net`).
-    - `.gitignore`에 `.env`, `.env.local`, `.env.production` 추가 (보안).
-    - 사용자가 `firebase functions:secrets:set GEMINI_API_KEY` 명령으로 Gemini API 키 시크릿 등록 완료 확인.
-    - `FIREBASE_SETUP_GUIDE.md` 6번 섹션을 실제 프로젝트 정보로 업데이트.
+## 결과 확인
+- 브라우저 검증 결과:
+  - `http://localhost:3000` 정상 접속 및 메인 UI 출력
+  - "상세페이지 생성(Mode A)" 및 "이미지 고도화(Mode C)" UI 진입 확인
+  - 설정 모달 정상 동작 확인
+- `npx tsc --noEmit` 실행 결과: 컴파일 오류 0건 (Clean)
 
-## 2026-04-12 07:45:00
-- **작업 내용:** Firebase 마이그레이션 Phase 1 - Cloud Functions 및 서비스 레이어 구현 완료
-- **상세 내역:**
-    - **Cloud Functions (`functions/index.js`) 신규 작성:**
-        - `geminiProxy`: Gemini API 프록시 (GEMINI_API_KEY Secrets 사용, 클라이언트 노출 방지)
-        - `saveProduct`: Firestore에 상품 데이터 저장 + Firebase Storage에 이미지/HTML 업로드
-        - `getTemplates` / `saveTemplate` / `deleteTemplate`: Firestore 기반 템플릿 CRUD
-        - `backupSettings` / `restoreSettings`: 설정 백업/복원
-        - CORS 미들웨어 적용, 타임아웃 9분 설정
-    - **프론트엔드 서비스 레이어 교체:**
-        - `services/firebaseService.ts` 신규 작성 (googleSheetService.ts 대체)
-        - `services/templateService.ts` 재작성 (localStorage → Firestore, async 변환)
-        - `services/settingsBackupService.ts` 재작성 (GAS → Cloud Functions)
-        - `services/geminiService.ts` GAS 참조 전면 제거 (callGeminiViaProxy URL 변경, GAS URL 분기 로직 4곳 삭제)
-    - **프론트엔드 컴포넌트 수정:**
-        - `StepResult.tsx`: import 교체 (saveToFirebase), 저장 로직 Firebase 기반
-        - `SettingsModal.tsx`: GAS URL/시트 ID 입력 필드 제거 → Firebase 연결 상태 표시로 대체
-        - `StepUpload.tsx`: getTemplates() async 래핑 (useEffect 수정)
-        - `App.tsx`: import 수정, getTemplates() await 추가, 자동 복원 로직 단순화
-    - **타입 및 환경 설정:**
-        - `vite-env.d.ts` 신규 생성 (VITE_CLOUD_FUNCTIONS_URL 타입 정의)
-    - **빌드 검증:** TypeScript 컴파일 에러 0개 (Firebase 관련), 기존 에러만 잔존 (ErrorBoundary, StepUpload)
-    - **다음 단계:** Cloud Functions 배포 (`firebase deploy --only functions`) 후 전체 파이프라인 테스트
+## 향후 과제
+- 실제 Cloud Functions 배포 환경에서의 엔드투엔드(E2E) 응답 속도 모니터링
+- 추가적인 사용자 UI 피드백에 따른 미세 조정

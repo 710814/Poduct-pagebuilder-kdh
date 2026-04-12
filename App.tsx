@@ -1,7 +1,8 @@
-import React, { useState, useCallback, useMemo, useEffect } from 'react';
+import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { AppMode, Step, UploadedFile, ProductAnalysis, ProductInputData, ImageEnhancementOptions, ImageEnhancementType } from './types';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { ToastProvider, useToastContext } from './contexts/ToastContext';
+import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { StepModeSelection } from './components/StepModeSelection';
 import { StepUpload } from './components/StepUpload';
 import { StepAnalysis } from './components/StepAnalysis';
@@ -11,15 +12,17 @@ import { StepImageEnhancement } from './components/StepImageEnhancement';
 import { ImageEnhancementResult } from './components/ImageEnhancementResult';
 import { SettingsModal } from './components/SettingsModal';
 import { GeneratingProgress, GenerationProgress } from './components/GeneratingProgress';
+import { Gallery } from './components/Gallery';
 import { analyzeProductImage, generateSectionImage, editSingleImageWithProgress, findMatchingColorOption, buildCollagePrompt, enhanceProductImage } from './services/geminiService';
 import { getTemplates, initializeBuiltInTemplates } from './services/templateService';
+import { saveToFirebase } from './services/firebaseService';
 import {
   isAutoBackupEnabled,
   isSettingsEmpty,
   restoreSettingsFromDrive,
   applyRestoredSettings
 } from './services/settingsBackupService';
-import { Loader2, Settings, HelpCircle } from 'lucide-react';
+import { Loader2, Settings, HelpCircle, LogIn, LogOut, Images } from 'lucide-react';
 import { ProgressStepper } from './components/ProgressStepper';
 
 const AppContent: React.FC = () => {
@@ -32,6 +35,17 @@ const AppContent: React.FC = () => {
 
   // Settings Modal State
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+
+  // 현재 뷰 (메인 생성 화면 vs 갤러리)
+  const [currentView, setCurrentView] = useState<'main' | 'gallery'>('main');
+
+  // Auth
+  const { user, loading: authLoading, signInWithGoogle, signOut, getIdToken } = useAuth();
+
+  // 자동저장 상태 (App 레벨에서 관리 — StepResult 언마운트/리마운트 시에도 1회만 실행)
+  const [autoSaveStatus, setAutoSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  // boolean flag — 객체 참조 비교 대신 사용 (섹션 업데이트로 analysisResult가 교체되어도 재저장 방지)
+  const autoSaved = useRef(false);
 
   // 자동 복원 상태
   const [isAutoRestoring, setIsAutoRestoring] = useState(false);
@@ -52,6 +66,43 @@ const AppContent: React.FC = () => {
   // C모드: 이미지 고도화 상태
   const [enhancementOptions, setEnhancementOptions] = useState<ImageEnhancementOptions | null>(null);
   const [enhancedImageUrl, setEnhancedImageUrl] = useState<string>('');
+
+  // 자동저장 — step이 RESULT로 변경되고 user가 로그인된 경우 1회만 실행
+  // analysisResult 객체 참조가 섹션 업데이트마다 바뀌므로 step 기준으로 트리거
+  useEffect(() => {
+    if (step !== Step.RESULT) return;
+    if (!analysisResult) return;
+    if (!user) return;
+    if (autoSaved.current) return; // 이미 저장함
+    autoSaved.current = true;
+    setAutoSaveStatus('saving');
+
+    const doSave = async () => {
+      try {
+        const idToken = await getIdToken();
+        await saveToFirebase(analysisResult, mode, idToken ?? undefined);
+        setAutoSaveStatus('saved');
+      } catch (e) {
+        console.error('[AutoSave] 저장 실패:', e);
+        setAutoSaveStatus('error');
+        autoSaved.current = false; // 실패 시 재시도 허용
+        toast.error('갤러리 자동 저장에 실패했습니다.');
+      }
+    };
+    doSave();
+  }, [step, user]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // 로그아웃 감지 — 진행 중인 플로우를 초기화하고 모드 선택으로 복귀
+  useEffect(() => {
+    if (!user && !authLoading && step !== Step.SELECT_MODE) {
+      setStep(Step.SELECT_MODE);
+      setUploadedFiles([]);
+      setAnalysisResult(null);
+      setCurrentView('main');
+      setAutoSaveStatus('idle');
+      autoSaved.current = false;
+    }
+  }, [user, authLoading]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // 앱 시작 시 빌트인 템플릿 초기화 및 자동 복원 시도
   useEffect(() => {
@@ -91,6 +142,11 @@ const AppContent: React.FC = () => {
   }, [toast]);
 
   const handleModeSelect = useCallback((selectedMode: AppMode) => {
+    // 로그인하지 않은 경우 Google 로그인 팝업 표시
+    if (!user) {
+      signInWithGoogle();
+      return;
+    }
     setMode(selectedMode);
     // C모드: 이미지 고도화는 전용 UI 사용
     if (selectedMode === AppMode.IMAGE_EDIT) {
@@ -98,7 +154,7 @@ const AppContent: React.FC = () => {
     } else {
       setStep(Step.UPLOAD_DATA);
     }
-  }, []);
+  }, [user, signInWithGoogle]);
 
   // C모드: 이미지 고도화 제출 핸들러
   const handleImageEnhance = useCallback(async (file: UploadedFile, options: ImageEnhancementOptions) => {
@@ -603,6 +659,8 @@ const AppContent: React.FC = () => {
     setStep(Step.SELECT_MODE);
     setUploadedFiles([]);
     setAnalysisResult(null);
+    setAutoSaveStatus('idle');
+    autoSaved.current = false;
   }, []);
 
   // 이전 단계로 돌아가기 (상태 유지)
@@ -639,11 +697,28 @@ const AppContent: React.FC = () => {
           </div>
 
           <div className="flex items-center gap-4">
-            {step > Step.SELECT_MODE && (
+            {step > Step.SELECT_MODE && currentView === 'main' && (
               <div className="text-sm font-medium text-gray-500 bg-gray-100 px-3 py-1 rounded-full">
                 {modeDisplayText}
               </div>
             )}
+
+            {/* 내 작업물 탭 (로그인 시에만 표시) */}
+            {!authLoading && user && (
+              <button
+                onClick={() => setCurrentView(currentView === 'gallery' ? 'main' : 'gallery')}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                  currentView === 'gallery'
+                    ? 'bg-indigo-100 text-indigo-700'
+                    : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100'
+                }`}
+                title="내 작업물 갤러리"
+              >
+                <Images className="w-4 h-4" />
+                <span className="hidden sm:inline-block">내 작업물</span>
+              </button>
+            )}
+
             <a
               href="/guide.html"
               target="_blank"
@@ -657,16 +732,48 @@ const AppContent: React.FC = () => {
             <button
               onClick={handleOpenSettings}
               className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-full transition-colors"
-              title="설정 (구글 시트 / 템플릿)"
+              title="설정"
             >
               <Settings className="w-5 h-5" />
             </button>
+
+            {/* 로그인 / 로그아웃 */}
+            {!authLoading && (
+              user ? (
+                <div className="flex items-center gap-2">
+                  {user.photoURL && (
+                    <img
+                      src={user.photoURL}
+                      alt={user.displayName || ''}
+                      className="w-7 h-7 rounded-full border border-gray-200"
+                      referrerPolicy="no-referrer"
+                    />
+                  )}
+                  <button
+                    onClick={signOut}
+                    className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-full transition-colors"
+                    title={`로그아웃 (${user.displayName})`}
+                  >
+                    <LogOut className="w-4 h-4" />
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={signInWithGoogle}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors shadow-sm"
+                  title="Google로 로그인"
+                >
+                  <LogIn className="w-4 h-4" />
+                  <span>로그인</span>
+                </button>
+              )
+            )}
           </div>
         </div>
       </header>
 
-      {/* Progress Stepper (모드 선택 단계 이후 표시) */}
-      {step > Step.SELECT_MODE && step <= Step.RESULT && mode !== AppMode.IMAGE_EDIT && (
+      {/* Progress Stepper (모드 선택 단계 이후, 메인 뷰에서만 표시) */}
+      {currentView === 'main' && step > Step.SELECT_MODE && step <= Step.RESULT && mode !== AppMode.IMAGE_EDIT && (
         <div className="bg-white border-b border-gray-100 py-6 mb-2">
           <ProgressStepper
             currentStep={
@@ -680,6 +787,13 @@ const AppContent: React.FC = () => {
 
       {/* Main Content */}
       <main className="flex-1" style={{ minHeight: 'calc(100vh - 80px)' }}>
+        {/* 갤러리 뷰 */}
+        {currentView === 'gallery' && user && (
+          <Gallery user={user} />
+        )}
+        {/* 갤러리 뷰가 아닐 때만 생성 파이프라인 렌더링 */}
+        {currentView === 'main' && <>
+
         {/* Step.GENERATING일 때 진행 상태 표시 */}
         {step === Step.GENERATING && analysisResult && (
           <GeneratingProgress
@@ -772,7 +886,19 @@ const AppContent: React.FC = () => {
           </div>
         ) : (
           <>
-            {step === Step.SELECT_MODE && <StepModeSelection onSelectMode={handleModeSelect} />}
+            {step === Step.SELECT_MODE && (
+              <>
+                {!user && !authLoading && (
+                  <div className="max-w-2xl mx-auto px-4 pt-6">
+                    <div className="flex items-center gap-3 bg-blue-50 border border-blue-200 rounded-xl px-5 py-3.5 text-sm text-blue-700">
+                      <LogIn className="w-4 h-4 flex-shrink-0" />
+                      <span>시작하기를 누르면 Google 로그인 후 이용할 수 있습니다.</span>
+                    </div>
+                  </div>
+                )}
+                <StepModeSelection onSelectMode={handleModeSelect} />
+              </>
+            )}
 
             {/* C모드: 이미지 고도화 전용 UI */}
             {step === Step.UPLOAD_DATA && mode === AppMode.IMAGE_EDIT && (
@@ -821,6 +947,7 @@ const AppContent: React.FC = () => {
                 uploadedFiles={uploadedFiles}
                 onUpdate={setAnalysisResult}
                 onOpenSettings={handleOpenSettings}
+                autoSaveStatus={autoSaveStatus}
               />
             )}
             {/* 디버깅: step이 예상과 다른 경우 (GENERATING 제외) */}
@@ -834,6 +961,7 @@ const AppContent: React.FC = () => {
             )}
           </>
         )}
+        </>}  {/* currentView === 'main' */}
       </main>
 
       {/* Settings Modal */}
@@ -848,9 +976,11 @@ const AppContent: React.FC = () => {
 const App: React.FC = () => {
   return (
     <ErrorBoundary>
-      <ToastProvider>
-        <AppContent />
-      </ToastProvider>
+      <AuthProvider>
+        <ToastProvider>
+          <AppContent />
+        </ToastProvider>
+      </AuthProvider>
     </ErrorBoundary>
   );
 };

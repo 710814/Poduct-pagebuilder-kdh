@@ -45,6 +45,35 @@ const setLastBackupDate = (date: string): void => {
 };
 
 /**
+ * 리콜 시 현재 로컬에 템플릿 세팅이 아예 비어있는지 확인
+ */
+export const isSettingsEmpty = (): boolean => {
+  try {
+    const templatesStr = localStorage.getItem('gemini_commerce_templates');
+    if (!templatesStr) return true;
+    const templates = JSON.parse(templatesStr);
+    return !templates || templates.length === 0;
+  } catch (e) {
+    return true;
+  }
+};
+
+/**
+ * 백업된 설정을 로컬에 적용
+ */
+export const applyRestoredSettings = async (settings: BackupSettings): Promise<void> => {
+  try {
+    if (settings && settings.templates) {
+      localStorage.setItem('gemini_commerce_templates', JSON.stringify(settings.templates));
+      // 여기서 추가적인 전역 상태 업데이트가 필요할 수도 있지만,
+      // 일반적으로 App에서 강제 리렌더링을 유도합니다.
+    }
+  } catch(e) {
+    console.warn("Error applying restored settings: ", e);
+  }
+};
+
+/**
  * 설정을 Firebase에 백업
  * @returns 성공 여부
  */
@@ -114,10 +143,10 @@ export const backupSettingsToDrive = async (): Promise<{ success: boolean; messa
  * Firebase에서 설정 복원
  * @returns 성공 여부
  */
-export const restoreSettingsFromDrive = async (): Promise<{ success: boolean; message: string }> => {
+export const restoreSettingsFromDrive = async (): Promise<{ success: boolean; message: string; settings?: BackupSettings; status?: string }> => {
   try {
     if (!FUNCTIONS_URL) {
-      return { success: false, message: 'Cloud Functions URL이 설정되지 않았습니다.' };
+      return { success: false, message: 'Cloud Functions URL이 설정되지 않았습니다.', status: 'error' };
     }
     
     console.log('[Restore] 설정 복원 시작...');
@@ -143,7 +172,7 @@ export const restoreSettingsFromDrive = async (): Promise<{ success: boolean; me
       const result = await response.json();
       
       if (result.status === 'not_found') {
-        return { success: false, message: '백업된 설정이 없습니다. 먼저 백업을 진행해주세요.' };
+        return { success: false, message: '백업된 설정이 없습니다. 먼저 백업을 진행해주세요.', status: 'not_found' };
       }
       
       if (result.status === 'success' && result.settings) {
@@ -172,7 +201,9 @@ export const restoreSettingsFromDrive = async (): Promise<{ success: boolean; me
           message: `설정이 복원되었습니다!\n\n` +
                    `📅 백업 시점: ${backupDateStr}\n` +
                    `📋 템플릿: ${restoredCount}개 복원\n\n` +
-                   `페이지를 새로고침하면 복원된 설정이 적용됩니다.`
+                   `페이지를 새로고침하면 복원된 설정이 적용됩니다.`,
+          settings: settings,
+          status: 'success'
         };
       } else {
         throw new Error(result.message || '복원 데이터를 읽을 수 없습니다');
@@ -188,7 +219,8 @@ export const restoreSettingsFromDrive = async (): Promise<{ success: boolean; me
     console.error('[Restore] 복원 실패:', error);
     return { 
       success: false, 
-      message: `복원 실패: ${error instanceof Error ? error.message : '알 수 없는 오류'}` 
+      message: `복원 실패: ${error instanceof Error ? error.message : '알 수 없는 오류'}`,
+      status: 'error'
     };
   }
 };

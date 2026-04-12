@@ -725,7 +725,7 @@ export const StepAnalysis: React.FC<Props> = React.memo(({ analysis, onUpdate, o
   }, [addSectionModal, analysis.sections, handleFieldChange, sectionTypeLabels, toast]);
 
   const removeSection = useCallback((index: number) => {
-    if (confirm('이 섹션을 삭제하시겠습니까?')) {
+    if (window.confirm('이 섹션을 삭제하시겠습니까?')) {
       const newSections = analysis.sections.filter((_, i) => i !== index);
       handleFieldChange('sections', newSections);
     }
@@ -1238,7 +1238,7 @@ export const StepAnalysis: React.FC<Props> = React.memo(({ analysis, onUpdate, o
                         </button>
 
                         <button
-                          onClick={() => handleGeneratePreview(section.id, undefined, undefined, true)}
+                          onClick={() => handleGeneratePreview(section.id)}
                           disabled={generatingPreviewId === section.id}
                           className="w-full py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-xs font-medium flex items-center justify-center gap-2 transition-colors disabled:opacity-50"
                         >

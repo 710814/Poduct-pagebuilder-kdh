@@ -29,8 +29,8 @@ const corsMiddleware = cors({ origin: true });
  * CORS를 적용하는 헬퍼 함수
  */
 function withCors(handler) {
-  return onRequest({ secrets: [geminiApiKey], timeoutSeconds: 540, memory: "1GiB" }, (req, res) => {
-    corsMiddleware(req, res, () => handler(req, res));
+  return onRequest({ secrets: [geminiApiKey], timeoutSeconds: 540, memory: "1GiB", cors: true, invoker: "public" }, (req, res) => {
+    handler(req, res);
   });
 }
 
@@ -38,8 +38,8 @@ function withCors(handler) {
  * 라이트 핸들러용 (시크릿 불필요)
  */
 function withCorsLight(handler) {
-  return onRequest({ timeoutSeconds: 60 }, (req, res) => {
-    corsMiddleware(req, res, () => handler(req, res));
+  return onRequest({ timeoutSeconds: 60, cors: true, invoker: "public" }, (req, res) => {
+    handler(req, res);
   });
 }
 
@@ -107,6 +107,21 @@ exports.geminiProxy = withCors(async (req, res) => {
 });
 
 // ============================================================
+// 공통: Authorization 헤더에서 uid 추출 (선택적)
+// ============================================================
+async function extractUid(req) {
+  const authHeader = req.headers.authorization || "";
+  if (!authHeader.startsWith("Bearer ")) return null;
+  const idToken = authHeader.split("Bearer ")[1];
+  try {
+    const decoded = await admin.auth().verifyIdToken(idToken);
+    return decoded.uid;
+  } catch {
+    return null;
+  }
+}
+
+// ============================================================
 // 2. 상품 데이터 저장 (Firestore + Storage)
 // ============================================================
 exports.saveProduct = withCors(async (req, res) => {
@@ -115,14 +130,16 @@ exports.saveProduct = withCors(async (req, res) => {
   }
 
   try {
+    const uid = await extractUid(req);
+
     const {
       timestamp, mode, productName, category, features,
       marketingCopy, sectionCount, sections_summary, image_prompts,
-      folderName, saveImagesToDrive, images, sections,
+      folderName, saveImagesToDrive, images,
       htmlContent, htmlFileName
     } = req.body;
 
-    // 1. Firestore에 상품 텍스트 데이터 저장
+    // 1. Firestore에 상품 텍스트 데이터 저장 (uid 스코핑)
     const productDoc = {
       timestamp: timestamp || new Date().toISOString(),
       mode: mode || "",
@@ -135,30 +152,46 @@ exports.saveProduct = withCors(async (req, res) => {
       image_prompts: image_prompts || "",
       folderName: folderName || "",
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      ...(uid ? { uid } : {}),
     };
 
-    const docRef = await db.collection("products").add(productDoc);
-    console.log(`[Save Product] Firestore 저장 완료: ${docRef.id}`);
+    // uid 있으면 users/{uid}/products, 없으면 products (하위호환)
+    const colRef = uid
+      ? db.collection("users").doc(uid).collection("products")
+      : db.collection("products");
+
+    const docRef = await colRef.add(productDoc);
+    console.log(`[Save Product] Firestore 저장 완료: ${docRef.id} (uid: ${uid || "anonymous"})`);
 
     // 2. Firebase Storage에 이미지 업로드
     const bucket = storage.bucket();
     const uploadedImages = [];
+    const storageBase = uid ? `users/${uid}` : "products";
+    let thumbnailUrl = "";
 
     if (saveImagesToDrive && images && images.length > 0) {
-      for (const img of images) {
+      for (let i = 0; i < images.length; i++) {
+        const img = images[i];
         try {
           const buffer = Buffer.from(img.base64, "base64");
-          const filePath = `products/${docRef.id}/images/section_${img.id}.png`;
+          const filePath = `${storageBase}/${docRef.id}/images/section_${img.id}.png`;
           const file = bucket.file(filePath);
 
+          // 다운로드 토큰 생성 (firebasestorage.googleapis.com URL은 CORS 기본 허용)
+          const token = crypto.randomUUID();
           await file.save(buffer, {
-            metadata: { contentType: "image/png" },
+            metadata: {
+              contentType: "image/png",
+              metadata: { firebaseStorageDownloadTokens: token },
+            },
           });
 
-          // 공개 URL 생성
-          await file.makePublic();
-          const publicUrl = `https://storage.googleapis.com/${bucket.name}/${filePath}`;
-          uploadedImages.push({ id: img.id, url: publicUrl });
+          // CORS 지원 Firebase Storage 다운로드 URL 사용
+          const downloadUrl = `https://firebasestorage.googleapis.com/v0/b/${bucket.name}/o/${encodeURIComponent(filePath)}?alt=media&token=${token}`;
+          uploadedImages.push({ id: img.id, url: downloadUrl });
+
+          // 첫 번째 이미지를 섬네일로 사용
+          if (i === 0) thumbnailUrl = downloadUrl;
 
           console.log(`[Save Product] 이미지 업로드: ${filePath}`);
         } catch (imgError) {
@@ -167,22 +200,43 @@ exports.saveProduct = withCors(async (req, res) => {
       }
     }
 
-    // 3. HTML 파일 업로드
+    // 3. HTML 파일 업로드 (Storage에 저장 + Firestore에 텍스트 저장)
+    let htmlStoredContent = "";
     if (htmlContent) {
       try {
         const htmlBuffer = Buffer.from(htmlContent, "base64");
-        const htmlPath = `products/${docRef.id}/${htmlFileName || "index.html"}`;
-        const htmlFile = bucket.file(htmlPath);
+        htmlStoredContent = htmlBuffer.toString("utf-8");
 
-        await htmlFile.save(htmlBuffer, {
+        // 상대경로 이미지를 Firebase Storage 절대 URL로 교체
+        // 예: src="images/section_sectionId.png" → src="https://storage.googleapis.com/..."
+        for (const img of uploadedImages) {
+          htmlStoredContent = htmlStoredContent.replace(
+            `src="images/section_${img.id}.png"`,
+            `src="${img.url}"`
+          );
+        }
+
+        const htmlPath = `${storageBase}/${docRef.id}/${htmlFileName || "index.html"}`;
+        const htmlFile = bucket.file(htmlPath);
+        const htmlFinal = Buffer.from(htmlStoredContent, "utf-8");
+
+        await htmlFile.save(htmlFinal, {
           metadata: { contentType: "text/html; charset=utf-8" },
         });
 
         await htmlFile.makePublic();
-        console.log(`[Save Product] HTML 업로드: ${htmlPath}`);
+        console.log(`[Save Product] HTML 업로드 (이미지 URL 교체 완료): ${htmlPath}`);
       } catch (htmlError) {
         console.error("[Save Product] HTML 업로드 실패:", htmlError);
       }
+    }
+
+    // 4. 섬네일 URL + HTML을 Firestore 문서에 업데이트
+    const updateData = {};
+    if (thumbnailUrl) updateData.thumbnailUrl = thumbnailUrl;
+    if (htmlStoredContent) updateData.htmlContent = htmlStoredContent;
+    if (Object.keys(updateData).length > 0) {
+      await docRef.update(updateData);
     }
 
     return res.json({
@@ -193,6 +247,161 @@ exports.saveProduct = withCors(async (req, res) => {
     });
   } catch (error) {
     console.error("[Save Product] 오류:", error);
+    return res.status(500).json({ status: "error", message: error.message });
+  }
+});
+
+// ============================================================
+// 2-b. 내 작업물 목록 조회
+// ============================================================
+exports.getProducts = withCorsLight(async (req, res) => {
+  if (req.method !== "GET") {
+    return res.status(405).json({ status: "error", message: "Method not allowed" });
+  }
+
+  const uid = await extractUid(req);
+  if (!uid) {
+    return res.status(401).json({ status: "error", message: "로그인이 필요합니다." });
+  }
+
+  try {
+    const snapshot = await db
+      .collection("users").doc(uid).collection("products")
+      .orderBy("createdAt", "desc")
+      .limit(100)
+      .get();
+
+    const products = [];
+    snapshot.forEach((doc) => {
+      const d = doc.data();
+      products.push({
+        productId: doc.id,
+        productName: d.productName || "",
+        createdAt: d.timestamp || new Date().toISOString(),
+        mode: d.mode || "",
+        thumbnailUrl: d.thumbnailUrl || "",
+        sectionCount: d.sectionCount || 0,
+        htmlContent: d.htmlContent || "",
+      });
+    });
+
+    return res.json({ status: "success", products });
+  } catch (error) {
+    console.error("[Get Products] 오류:", error);
+    return res.status(500).json({ status: "error", message: error.message });
+  }
+});
+
+// ============================================================
+// 2-c. 작업물 삭제
+// ============================================================
+exports.deleteProduct = withCorsLight(async (req, res) => {
+  if (req.method !== "DELETE" && req.method !== "POST") {
+    return res.status(405).json({ status: "error", message: "Method not allowed" });
+  }
+
+  const uid = await extractUid(req);
+  if (!uid) {
+    return res.status(401).json({ status: "error", message: "로그인이 필요합니다." });
+  }
+
+  try {
+    const productId = req.body.productId;
+    if (!productId) {
+      return res.status(400).json({ status: "error", message: "productId가 필요합니다." });
+    }
+
+    // 본인 데이터인지 확인 후 삭제
+    const docRef = db.collection("users").doc(uid).collection("products").doc(productId);
+    const doc = await docRef.get();
+    if (!doc.exists) {
+      return res.status(404).json({ status: "error", message: "작업물을 찾을 수 없습니다." });
+    }
+
+    // 1. Storage 파일 삭제 (productId 하위의 모든 파일)
+    try {
+      const storageBase = uid ? `users/${uid}` : "products";
+      const folderPath = `${storageBase}/${productId}/`;
+      const bucket = storage.bucket();
+      
+      // 해당 경로로 시작하는 모든 파일 삭제
+      await bucket.deleteFiles({ prefix: folderPath });
+      console.log(`[Delete Product] Storage 폴더 삭제 완료: ${folderPath}`);
+    } catch (storageErr) {
+      console.error("[Delete Product] Storage 삭제 중 오류 (계속 진행):", storageErr);
+      // 스토리지 삭제 실패가 DB 삭제 차단하지 않도록 catch만 함
+    }
+
+    // 2. Firestore 문서 삭제
+    await docRef.delete();
+    console.log(`[Delete Product] Firestore 삭제 완료: ${productId} (uid: ${uid})`);
+    return res.json({ status: "success", message: "삭제되었습니다." });
+  } catch (error) {
+    console.error("[Delete Product] 오류:", error);
+    return res.status(500).json({ status: "error", message: error.message });
+  }
+});
+
+/**
+ * 2-d. 다운로드용 서명된 URL 생성 (CORS 우회용)
+ */
+exports.getDownloadUrl = withCorsLight(async (req, res) => {
+  if (req.method !== "POST" && req.method !== "GET") {
+    return res.status(405).json({ status: "error", message: "Method not allowed" });
+  }
+
+  const uid = await extractUid(req);
+  if (!uid) {
+    return res.status(401).json({ status: "error", message: "로그인이 필요합니다." });
+  }
+
+  try {
+    const { productId } = req.body;
+    if (!productId) {
+      return res.status(400).json({ status: "error", message: "productId가 필요합니다." });
+    }
+
+    // 1. 해당 상품 정보 가져오기
+    const doc = await db.collection("users").doc(uid).collection("products").doc(productId).get();
+    if (!doc.exists) {
+      return res.status(404).json({ status: "error", message: "작업물을 찾을 수 없습니다." });
+    }
+
+    const data = doc.data();
+    if (!data.thumbnailUrl) {
+      return res.status(404).json({ status: "error", message: "이미지 URL이 없습니다." });
+    }
+
+    // 2. Storage 경로 추출
+    // thumbnailUrl 예시: https://firebasestorage.googleapis.com/v0/b/.../o/users%2Fuid%2FproductId%2Fimages%2Fsection_id.png?alt=media&token=...
+    const storageBase = uid ? `users/${uid}` : "products";
+    const bucket = storage.bucket();
+    
+    // thumbnailUrl에서 파일 경로 파싱 시도 (또는 productId 기반으로 유추)
+    // 여기선 productId와 첫 번째 이미지 파일명을 기반으로 경로를 구성 (저장 시 관례에 따라)
+    const folderPath = `${storageBase}/${productId}/images/`;
+    const [files] = await bucket.getFiles({ prefix: folderPath });
+    
+    if (files.length === 0) {
+      return res.status(404).json({ status: "error", message: "스토리지에서 이미지를 찾을 수 없습니다." });
+    }
+
+    const file = files[0]; // 첫 번째 이미지를 다운로드 대상으로 함
+
+    // 3. 서명된 URL 생성 (5분 유효, 강제 다운로드 설정)
+    const [signedUrl] = await file.getSignedUrl({
+      version: 'v4',
+      action: 'read',
+      expires: Date.now() + 5 * 60 * 1000, // 5분
+      prompt: false, // 브라우저 팝업 방지
+      responseType: 'image/png',
+      responseContentDisposition: `attachment; filename="${encodeURIComponent(data.productName || 'image')}.png"`,
+    });
+
+    console.log(`[Get Download URL] 서명된 URL 생성 완료: ${productId}`);
+    return res.json({ status: "success", downloadUrl: signedUrl });
+  } catch (error) {
+    console.error("[Get Download URL] 오류:", error);
     return res.status(500).json({ status: "error", message: error.message });
   }
 });
