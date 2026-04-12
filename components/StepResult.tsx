@@ -1,6 +1,7 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useRef, useImperativeHandle, forwardRef } from 'react';
 import { ProductAnalysis, AppMode, UploadedFile } from '../types';
 import { Code, CheckCircle, Loader2, RefreshCw, X, MessageSquare, Image as ImageIcon, Eye, ArrowLeft, Home, Copy, Upload, Download } from 'lucide-react';
+import { toPng } from 'html-to-image';
 import { generateSectionImage } from '../services/geminiService';
 import { useToastContext } from '../contexts/ToastContext';
 
@@ -15,9 +16,43 @@ interface Props {
   autoSaveStatus: 'idle' | 'saving' | 'saved' | 'error';
 }
 
-export const StepResult: React.FC<Props> = ({ data, onRestart, onGoBack, mode, uploadedFiles, onUpdate, autoSaveStatus }) => {
-  const [regeneratingId, setRegeneratingId] = useState<string | null>(null);
-  const toast = useToastContext();
+export const StepResult = forwardRef<{ captureFullPage: () => Promise<string | null> }, Props>(
+  ({ data, onRestart, onGoBack, mode, uploadedFiles, onUpdate, autoSaveStatus }, ref) => {
+    const [regeneratingId, setRegeneratingId] = useState<string | null>(null);
+    const toast = useToastContext();
+    const captureAreaRef = useRef<HTMLDivElement>(null);
+
+    // 부모에게 캡처 기능 노출
+    useImperativeHandle(ref, () => ({
+      captureFullPage: async () => {
+        if (!captureAreaRef.current) return null;
+        try {
+          // 이미지 로딩 대기
+          const images = captureAreaRef.current.getElementsByTagName('img');
+          await Promise.all(
+            Array.from(images).map(img => {
+              if (img.complete) return Promise.resolve();
+              return new Promise(resolve => {
+                img.onload = resolve;
+                img.onerror = resolve;
+              });
+            })
+          );
+
+          // 캡처
+          return await toPng(captureAreaRef.current, {
+            pixelRatio: 2,
+            backgroundColor: '#ffffff',
+            style: {
+              transform: 'none' // 캡처 시 변형 방지
+            }
+          });
+        } catch (e) {
+          console.error('[StepResult] 캡처 실패:', e);
+          return null;
+        }
+      }
+    }));
 
   // 프롬프트 수정 모달 상태
   const [editModal, setEditModal] = useState<{ isOpen: boolean; sectionId: string; prompt: string } | null>(null);
@@ -491,7 +526,7 @@ export const StepResult: React.FC<Props> = ({ data, onRestart, onGoBack, mode, u
           </div>
           <div className="flex-1 overflow-y-auto custom-scrollbar p-0 bg-white">
             {/* Actual rendered preview */}
-            <div className="max-w-[840px] mx-auto bg-white min-h-full">
+            <div ref={captureAreaRef} className="max-w-[840px] mx-auto bg-white min-h-full shadow-inner">
               {/* Hero - 항상 렌더링 (이미지 먼저, 텍스트 아래) */}
               <div className="text-center py-16 px-6 bg-white">
                 {/* Hero 이미지 먼저 표시 */}
@@ -885,4 +920,4 @@ export const StepResult: React.FC<Props> = ({ data, onRestart, onGoBack, mode, u
       <div className="h-20" />
     </div >
   );
-};
+});

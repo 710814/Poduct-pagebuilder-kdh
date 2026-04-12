@@ -2,6 +2,8 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { User } from 'firebase/auth';
 import { Loader2, Download, Trash2, Images, RefreshCw, X, CheckSquare, Square, FileCode, Image as ImageIcon, Eye } from 'lucide-react';
 import { getUserProducts, deleteProduct, ProductSummary, getProductDownloadUrl } from '../services/firebaseService';
+import { toPng } from 'html-to-image';
+import { saveAs } from 'file-saver';
 
 interface Props {
   user: User;
@@ -102,7 +104,80 @@ export const Gallery: React.FC<Props> = ({ user }) => {
     URL.revokeObjectURL(url);
   };
 
-  // ─── 이미지 다운로드 ────────────────────────────────────────
+  // ─── 상세페이지 통이미지 다운로드 ─────────────────────────────
+  const [isCapturing, setIsCapturing] = useState(false);
+
+  const handleDownloadLongImage = async (product: ProductSummary, e: React.MouseEvent) => {
+    e.stopPropagation();
+    
+    // 이미 캡처된 통이미지(thumbnailUrl)가 있으면 바로 다운로드
+    if (product.thumbnailUrl) {
+      try {
+        setIsCapturing(true);
+        const idToken = await user.getIdToken();
+        const signedUrl = await getProductDownloadUrl(product.productId, idToken);
+        
+        const a = document.createElement('a');
+        a.href = signedUrl;
+        a.style.display = 'none';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        return;
+      } catch (err) {
+        console.error('❌ [Gallery] 통이미지 다운로드 실패:', err);
+      } finally {
+        setIsCapturing(false);
+      }
+    }
+
+    // fallback: 런타임 캡처 (기존에 캡처본 없이 저장된 경우 대비)
+    if (!product.htmlContent) { alert('다운로드 가능한 데이터가 없습니다.'); return; }
+    setIsCapturing(true);
+    try {
+      // 1. 임시 컨테이너 생성
+      const container = document.createElement('div');
+      container.style.position = 'absolute';
+      container.style.top = '-9999px';
+      container.style.left = '-9999px';
+      container.style.width = '840px'; // 상세페이지 표준 폭
+      container.style.background = '#ffffff';
+      container.innerHTML = product.htmlContent;
+      document.body.appendChild(container);
+
+      // 2. 이미지 로딩 대기
+      const images = container.getElementsByTagName('img');
+      const loadPromises = Array.from(images).map(img => {
+        if (img.complete) return Promise.resolve();
+        return new Promise(resolve => {
+          img.onload = resolve;
+          img.onerror = resolve;
+        });
+      });
+      await Promise.all(loadPromises);
+
+      // 3. 캡처 (고해상도)
+      const dataUrl = await toPng(container, {
+        pixelRatio: 2,
+        backgroundColor: '#ffffff',
+        skipFonts: false
+      });
+
+      // 4. 저장
+      saveAs(dataUrl, `${product.productName.replace(/\s+/g, '_')}_full_detail.png`);
+      
+      // 5. 정리
+      document.body.removeChild(container);
+      console.log('✅ [Gallery] 통이미지 캡처 및 다운로드 완료');
+    } catch (err) {
+      console.error('❌ [Gallery] 이미지 캡처 실패:', err);
+      alert('상세페이지 이미지화 중 오류가 발생했습니다.');
+    } finally {
+      setIsCapturing(false);
+    }
+  };
+
+  // ─── 이미지 다운로드 (대표이미지) ───────────────────────────
   const handleDownloadImage = async (product: ProductSummary, e: React.MouseEvent) => {
     e.stopPropagation();
     if (!product.thumbnailUrl) { alert('저장된 이미지가 없습니다.'); return; }
@@ -348,13 +423,13 @@ export const Gallery: React.FC<Props> = ({ user }) => {
               </div>
               <div className="flex items-center gap-2">
                 <button
-                  onClick={(e) => handleDownloadImage(previewProduct, e)}
-                  disabled={!previewProduct.thumbnailUrl}
-                  className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-gray-600 hover:text-indigo-700 hover:bg-indigo-50 rounded-lg transition-colors disabled:opacity-30"
-                  title="이미지 다운로드"
+                  onClick={(e) => handleDownloadLongImage(previewProduct, e)}
+                  disabled={isCapturing}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-indigo-600 text-white hover:bg-indigo-700 rounded-lg transition-colors disabled:opacity-50"
+                  title="상세페이지 전체를 이미지로 저장"
                 >
-                  <Download className="w-4 h-4" />
-                  이미지
+                  {isCapturing ? <Loader2 className="w-4 h-4 animate-spin" /> : <ImageIcon className="w-4 h-4" />}
+                  페이지 이미지 저장
                 </button>
                 <button
                   onClick={(e) => handleDownloadHtml(previewProduct, e)}
@@ -373,8 +448,18 @@ export const Gallery: React.FC<Props> = ({ user }) => {
             </div>
 
             {/* 모달 콘텐츠 */}
-            <div className="flex-1 overflow-hidden">
-              {previewProduct.htmlContent ? (
+            <div className="flex-1 overflow-y-auto bg-gray-50 custom-scrollbar">
+              {previewProduct.thumbnailUrl ? (
+                /* 저장된 통이미지(캡처본) 표시 */
+                <div className="flex justify-center p-4 min-h-full">
+                  <img
+                    src={previewProduct.thumbnailUrl}
+                    alt={previewProduct.productName}
+                    className="max-w-[840px] w-full h-auto shadow-2xl bg-white"
+                  />
+                </div>
+              ) : previewProduct.htmlContent ? (
+                /* 구버전 데이터 호환용 iframe */
                 <iframe
                   srcDoc={previewProduct.htmlContent}
                   className="w-full h-full border-0"
@@ -382,14 +467,6 @@ export const Gallery: React.FC<Props> = ({ user }) => {
                   sandbox="allow-same-origin"
                   title={previewProduct.productName}
                 />
-              ) : previewProduct.thumbnailUrl ? (
-                <div className="flex items-center justify-center h-full p-8 bg-gray-50">
-                  <img
-                    src={previewProduct.thumbnailUrl}
-                    alt={previewProduct.productName}
-                    className="max-w-full max-h-[65vh] object-contain rounded-lg shadow"
-                  />
-                </div>
               ) : (
                 <div className="flex items-center justify-center h-64 text-gray-400">
                   <p>미리보기를 사용할 수 없습니다.</p>

@@ -174,98 +174,11 @@ const generateHTML = (data: ProductAnalysis): string => {
 </html>`;
 };
 
-// ============================================================
-// 갤러리용 타입
-// ============================================================
-
-export interface ProductSummary {
-  productId: string;
-  productName: string;
-  createdAt: string;
-  mode: string;
-  thumbnailUrl: string;
-  sectionCount: number;
-  htmlContent?: string;
-}
-
-// ============================================================
-// 갤러리 API
-// ============================================================
-
-/**
- * 내 작업물 목록 조회
- */
-export const getUserProducts = async (idToken: string): Promise<ProductSummary[]> => {
-  if (!FUNCTIONS_URL) throw new Error("FIREBASE_NOT_CONFIGURED");
-
-  const response = await fetch(`${FUNCTIONS_URL}/getProducts`, {
-    method: 'GET',
-    headers: {
-      'Authorization': `Bearer ${idToken}`,
-    },
-  });
-
-  if (!response.ok) {
-    throw new Error(`목록 조회 실패 (${response.status})`);
-  }
-
-  const result = await response.json();
-  return result.products ?? [];
-};
-
-/**
- * 작업물 삭제
- */
-export const deleteProduct = async (productId: string, idToken: string): Promise<void> => {
-  if (!FUNCTIONS_URL) throw new Error("FIREBASE_NOT_CONFIGURED");
-
-  const response = await fetch(`${FUNCTIONS_URL}/deleteProduct`, {
-    method: 'DELETE',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${idToken}`,
-    },
-    body: JSON.stringify({ productId }),
-  });
-
-  if (!response.ok) {
-    throw new Error(`삭제 실패 (${response.status})`);
-  }
-};
-
-/**
- * 작업물 다운로드 URL 요청 (Signed URL)
- */
-export const getProductDownloadUrl = async (productId: string, idToken: string): Promise<string> => {
-  if (!FUNCTIONS_URL) throw new Error("FIREBASE_NOT_CONFIGURED");
-
-  const response = await fetch(`${FUNCTIONS_URL}/getDownloadUrl`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${idToken}`,
-    },
-    body: JSON.stringify({ productId }),
-  });
-
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.message || `다운로드 URL 생성 실패 (${response.status})`);
-  }
-
-  const result = await response.json();
-  return result.downloadUrl;
-};
-
-// ============================================================
-// 저장 API
-// ============================================================
-
 /**
  * Firebase(Cloud Functions)에 상품 데이터 저장
  * 기존 saveToGoogleSheet과 동일한 역할
  */
-export const saveToFirebase = async (data: ProductAnalysis, mode: AppMode, idToken?: string, fullPageImage?: string | null): Promise<boolean> => {
+export const saveToFirebase = async (data: ProductAnalysis, mode: AppMode): Promise<boolean> => {
   if (!FUNCTIONS_URL) {
     throw new Error("FIREBASE_NOT_CONFIGURED");
   }
@@ -278,32 +191,17 @@ export const saveToFirebase = async (data: ProductAnalysis, mode: AppMode, idTok
   const safeProductName = data.productName.replace(/[\/\\]/g, '_').substring(0, 30); 
   const folderName = `[${dateStr}] ${safeProductName}`;
 
-  // 3. 이미지 데이터 추출 (모든 섹션 및 하위 슬롯 이미지 수집)
-  const imagesToSave: { id: string; title: string; base64: string }[] = [];
-  
-  data.sections.forEach((section) => {
-    // 3A. 섹션 대표 이미지 수집
+  // 3. 이미지 데이터 추출
+  const imagesToSave = data.sections.map((section) => {
     if (section.imageUrl && section.imageUrl.startsWith('data:image')) {
-      imagesToSave.push({
+      return {
         id: section.id,
         title: section.title,
         base64: section.imageUrl.split(',')[1]
-      });
+      };
     }
-
-    // 3B. 그리드/콜라주 하위 슬롯 이미지 수집
-    if (section.imageSlots && section.imageSlots.length > 0) {
-      section.imageSlots.forEach((slot, idx) => {
-        if (slot.imageUrl && slot.imageUrl.startsWith('data:image')) {
-          imagesToSave.push({
-            id: `${section.id}_slot_${idx}`,
-            title: `${section.title} - 이미지 ${idx + 1}`,
-            base64: slot.imageUrl.split(',')[1]
-          });
-        }
-      });
-    }
-  });
+    return null;
+  }).filter(item => item !== null);
 
   // 4. HTML 파일 생성
   const htmlContent = generateHTML(data);
@@ -316,18 +214,14 @@ export const saveToFirebase = async (data: ProductAnalysis, mode: AppMode, idTok
     saveImagesToDrive: imagesToSave.length > 0,
     images: imagesToSave,
     htmlContent: htmlBase64,
-    htmlFileName: `${safeProductName}_detail_page.html`,
-    fullPageImage: fullPageImage && fullPageImage.includes(',') ? fullPageImage.split(',')[1] : null
+    htmlFileName: `${safeProductName}_detail_page.html`
   };
 
   console.log('🔵 [Firebase Service] Cloud Functions에 데이터 전송 중...');
 
-  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-  if (idToken) headers['Authorization'] = `Bearer ${idToken}`;
-
   const response = await fetch(`${FUNCTIONS_URL}/saveProduct`, {
     method: 'POST',
-    headers,
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload)
   });
 

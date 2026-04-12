@@ -60,6 +60,9 @@ const AppContent: React.FC = () => {
     startTime: null
   });
 
+  // StepResult 참조용 Ref
+  const resultRef = useRef<{ captureFullPage: () => Promise<string | null> }>(null);
+
   // Toast 알림 시스템
   const toast = useToastContext();
 
@@ -79,9 +82,15 @@ const AppContent: React.FC = () => {
 
     const doSave = async () => {
       try {
+        // 1. 상세페이지 통이미지 캡처 시도
+        console.log('📸 [AutoSave] 상세페이지 통이미지 캡처 중...');
+        const fullPageImage = await resultRef.current?.captureFullPage();
+        
+        // 2. 데이터 저장
         const idToken = await getIdToken();
-        await saveToFirebase(analysisResult, mode, idToken ?? undefined);
+        await saveToFirebase(analysisResult, mode, idToken ?? undefined, fullPageImage);
         setAutoSaveStatus('saved');
+        console.log('✅ [AutoSave] 저장 및 캡처 완료');
       } catch (e) {
         console.error('[AutoSave] 저장 실패:', e);
         setAutoSaveStatus('error');
@@ -940,6 +949,7 @@ const AppContent: React.FC = () => {
             {/* A/B모드: 기존 결과 UI */}
             {step === Step.RESULT && mode !== AppMode.IMAGE_EDIT && analysisResult && (
               <StepResult
+                ref={resultRef}
                 data={analysisResult}
                 onRestart={restart}
                 onGoBack={goBack}
