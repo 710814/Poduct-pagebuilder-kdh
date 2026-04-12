@@ -698,7 +698,13 @@ const AppContent: React.FC = () => {
       {/* Header */}
       <header className="bg-white border-b border-gray-200 py-4 px-6 sticky top-0 z-50" style={{ backgroundColor: '#ffffff', borderBottom: '1px solid #e5e7eb', padding: '16px 24px' }}>
         <div className="max-w-7xl mx-auto flex items-center justify-between">
-          <div className="flex items-center space-x-2 cursor-pointer" onClick={restart}>
+          <div
+            className="flex items-center space-x-2 cursor-pointer"
+            onClick={() => {
+              restart();
+              setCurrentView('main');
+            }}
+          >
             <div className="w-8 h-8 bg-gradient-to-tr from-blue-600 to-indigo-600 rounded-lg flex items-center justify-center text-white font-bold text-lg">
               G
             </div>
