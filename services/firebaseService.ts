@@ -118,62 +118,6 @@ export const generateCSV = (data: ProductAnalysis, mode: AppMode): string => {
   return headers.join(',') + '\n' + values.join(',');
 };
 
-/**
- * HTML 페이지 생성 함수 (기존과 동일)
- */
-const generateHTML = (data: ProductAnalysis): string => {
-  return `<!DOCTYPE html>
-<html lang="ko">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>${data.productName}</title>
-    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
-    <style>
-        body { font-family: 'Noto Sans KR', sans-serif; margin: 0; padding: 0; color: #333; line-height: 1.6; }
-        .container { max-width: 800px; margin: 0 auto; }
-        .hero { text-align: center; padding: 60px 20px; background-color: #f9fafb; }
-        .hero h1 { font-size: 2.5rem; margin-bottom: 20px; color: #111; }
-        .hero p { font-size: 1.2rem; color: #555; max-width: 600px; margin: 0 auto; }
-        .features { padding: 40px 20px; background: #fff; }
-        .features ul { max-width: 600px; margin: 0 auto; padding-left: 20px; }
-        .features li { margin-bottom: 10px; font-size: 1.1rem; }
-        .section { padding: 60px 20px; border-bottom: 1px solid #eee; text-align: center; }
-        .section img { max-width: 100%; height: auto; border-radius: 8px; margin-bottom: 30px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
-        .section h2 { font-size: 2rem; margin-bottom: 20px; }
-        .section p { font-size: 1.1rem; color: #666; max-width: 700px; margin: 0 auto; white-space: pre-wrap; }
-        .footer { padding: 40px; text-align: center; font-size: 0.9rem; color: #999; background: #f1f1f1; }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <header class="hero">
-            <h1>${data.productName}</h1>
-            <p>${data.marketingCopy}</p>
-        </header>
-
-        <section class="features">
-            <ul>
-                ${data.mainFeatures.map(f => `<li>${f}</li>`).join('')}
-            </ul>
-        </section>
-
-        ${data.sections.map(section => `
-        <section class="section">
-            ${section.imageUrl ? `<img src="images/section_${section.id}.png" alt="${section.title}" />` : ''}
-            <h2>${section.title}</h2>
-            <p>${section.content}</p>
-        </section>
-        `).join('')}
-
-        <footer class="footer">
-            <p>© ${new Date().getFullYear()} ${data.productName}. All rights reserved.</p>
-        </footer>
-    </div>
-</body>
-</html>`;
-};
-
 // ============================================================
 // 갤러리용 타입
 // ============================================================
@@ -272,52 +216,27 @@ export const saveToFirebase = async (data: ProductAnalysis, mode: AppMode, idTok
 
   // 1. 기본 텍스트 데이터 준비
   const rowData = formatDataForFirestore(data, mode);
-  
+
   // 2. 폴더명 생성
   const dateStr = new Date().toISOString().split('T')[0];
-  const safeProductName = data.productName.replace(/[\/\\]/g, '_').substring(0, 30); 
+  const safeProductName = data.productName.replace(/[\/\\]/g, '_').substring(0, 30);
   const folderName = `[${dateStr}] ${safeProductName}`;
 
-  // 3. 이미지 데이터 추출 (모든 섹션 및 하위 슬롯 이미지 수집)
-  const imagesToSave: { id: string; title: string; base64: string }[] = [];
-  
-  data.sections.forEach((section) => {
-    // 3A. 섹션 대표 이미지 수집
-    if (section.imageUrl && section.imageUrl.startsWith('data:image')) {
-      imagesToSave.push({
-        id: section.id,
-        title: section.title,
-        base64: section.imageUrl.split(',')[1]
-      });
-    }
+  // 3. fullPageImage base64 추출 (자동저장은 통이미지만 보내므로 페이로드 ~수MB 수준)
+  let fullPageBase64: string | null = null;
+  if (fullPageImage && fullPageImage.includes(',')) {
+    fullPageBase64 = fullPageImage.split(',')[1];
+  }
 
-    // 3B. 그리드/콜라주 하위 슬롯 이미지 수집
-    if (section.imageSlots && section.imageSlots.length > 0) {
-      section.imageSlots.forEach((slot, idx) => {
-        if (slot.imageUrl && slot.imageUrl.startsWith('data:image')) {
-          imagesToSave.push({
-            id: `${section.id}_slot_${idx}`,
-            title: `${section.title} - 이미지 ${idx + 1}`,
-            base64: slot.imageUrl.split(',')[1]
-          });
-        }
-      });
-    }
-  });
+  console.log(
+    `📏 [Firebase Service] 페이로드 — FullPage ${((fullPageBase64?.length || 0) / 1024 / 1024).toFixed(2)}MB`
+  );
 
-  // 4. HTML 파일 생성
-  const htmlContent = generateHTML(data);
-  const htmlBase64 = btoa(unescape(encodeURIComponent(htmlContent)));
-
-  // 5. Cloud Functions에 전송
+  // 4. Cloud Functions에 전송
   const payload = {
-    ...rowData, 
+    ...rowData,
     folderName: folderName,
-    saveImagesToDrive: imagesToSave.length > 0,
-    images: imagesToSave,
-    htmlContent: htmlBase64,
-    htmlFileName: `${safeProductName}_detail_page.html`,
-    fullPageImage: fullPageImage && fullPageImage.includes(',') ? fullPageImage.split(',')[1] : null
+    fullPageImage: fullPageBase64
   };
 
   console.log('🔵 [Firebase Service] Cloud Functions에 데이터 전송 중...');

@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useRef, useImperativeHandle, forwardRef } from 'react';
 import { ProductAnalysis, AppMode, UploadedFile } from '../types';
 import { Code, CheckCircle, Loader2, RefreshCw, X, MessageSquare, Image as ImageIcon, Eye, ArrowLeft, Home, Copy, Upload, Download } from 'lucide-react';
-import { toPng } from 'html-to-image';
+import { toJpeg } from 'html-to-image';
 import { generateSectionImage } from '../services/geminiService';
 import { useToastContext } from '../contexts/ToastContext';
 
@@ -39,12 +39,17 @@ export const StepResult = forwardRef<{ captureFullPage: () => Promise<string | n
             })
           );
 
-          // 캡처
-          return await toPng(captureAreaRef.current, {
+          // 캡처 — 가로 폭은 그대로 유지(pixelRatio:2), PNG→JPEG로 용량만 압축
+          // quality:0.85 = 쇼핑몰 상세페이지 표준 품질
+          // skipFonts:true = 외부 폰트(Google Fonts) cssRules 접근 시 SecurityError 회피
+          return await toJpeg(captureAreaRef.current, {
             pixelRatio: 2,
+            quality: 0.85,
             backgroundColor: '#ffffff',
+            cacheBust: true,
+            skipFonts: true,
             style: {
-              transform: 'none' // 캡처 시 변형 방지
+              transform: 'none'
             }
           });
         } catch (e) {

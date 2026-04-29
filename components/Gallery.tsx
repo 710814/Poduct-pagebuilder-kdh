@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { User } from 'firebase/auth';
-import { Loader2, Download, Trash2, Images, RefreshCw, X, CheckSquare, Square, FileCode, Image as ImageIcon, Eye } from 'lucide-react';
+import { Loader2, Download, Trash2, Images, RefreshCw, X, CheckSquare, Square, Image as ImageIcon, Eye } from 'lucide-react';
 import { getUserProducts, deleteProduct, ProductSummary, getProductDownloadUrl } from '../services/firebaseService';
 import { toPng } from 'html-to-image';
 import { saveAs } from 'file-saver';
@@ -87,21 +87,6 @@ export const Gallery: React.FC<Props> = ({ user }) => {
     } finally {
       setIsDeleting(false);
     }
-  };
-
-  // ─── HTML 다운로드 ──────────────────────────────────────────
-  const handleDownloadHtml = (product: ProductSummary, e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (!product.htmlContent) { alert('저장된 HTML이 없습니다.'); return; }
-    const blob = new Blob([product.htmlContent], { type: 'text/html;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${product.productName.replace(/\s+/g, '_')}_detail_page.html`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
   };
 
   // ─── 상세페이지 통이미지 다운로드 ─────────────────────────────
@@ -370,20 +355,13 @@ export const Gallery: React.FC<Props> = ({ user }) => {
                   {/* 액션 버튼 */}
                   <div className="flex gap-1">
                     <button
-                      onClick={(e) => handleDownloadHtml(product, e)}
-                      className="flex-1 flex items-center justify-center gap-1 px-1.5 py-1 bg-gray-900 hover:bg-gray-700 text-white text-[10px] rounded-md transition-colors"
-                      title="HTML 다운로드"
-                    >
-                      <FileCode className="w-3 h-3" />
-                      HTML
-                    </button>
-                    <button
                       onClick={(e) => handleDownloadImage(product, e)}
                       disabled={!product.thumbnailUrl}
-                      className="p-1 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-md transition-colors disabled:opacity-30"
+                      className="flex-1 flex items-center justify-center gap-1 px-1.5 py-1 bg-indigo-600 hover:bg-indigo-700 text-white text-[10px] rounded-md transition-colors disabled:opacity-30"
                       title="이미지 다운로드"
                     >
-                      <ImageIcon className="w-3.5 h-3.5" />
+                      <ImageIcon className="w-3 h-3" />
+                      이미지
                     </button>
                     <button
                       onClick={(e) => handleDeleteSingle(product.productId, product.productName, e)}
@@ -430,13 +408,6 @@ export const Gallery: React.FC<Props> = ({ user }) => {
                 >
                   {isCapturing ? <Loader2 className="w-4 h-4 animate-spin" /> : <ImageIcon className="w-4 h-4" />}
                   페이지 이미지 저장
-                </button>
-                <button
-                  onClick={(e) => handleDownloadHtml(previewProduct, e)}
-                  className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-gray-900 text-white hover:bg-gray-700 rounded-lg transition-colors"
-                >
-                  <FileCode className="w-4 h-4" />
-                  HTML 다운로드
                 </button>
                 <button
                   onClick={() => setPreviewProduct(null)}

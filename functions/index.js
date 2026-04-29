@@ -136,7 +136,8 @@ exports.saveProduct = withCors(async (req, res) => {
       timestamp, mode, productName, category, features,
       marketingCopy, sectionCount, sections_summary, image_prompts,
       folderName, saveImagesToDrive, images,
-      htmlContent, htmlFileName
+      htmlContent, htmlFileName,
+      fullPageImage
     } = req.body;
 
     // 1. Firestore에 상품 텍스트 데이터 저장 (uid 스코핑)
@@ -197,6 +198,27 @@ exports.saveProduct = withCors(async (req, res) => {
         } catch (imgError) {
           console.error(`[Save Product] 이미지 업로드 실패 (${img.id}):`, imgError);
         }
+      }
+    }
+
+    // 2-b. 상세페이지 통이미지 업로드 (썸네일/미리보기 우선 소스)
+    if (fullPageImage) {
+      try {
+        const fpBuffer = Buffer.from(fullPageImage, "base64");
+        const fpPath = `${storageBase}/${docRef.id}/fullpage.jpg`;
+        const fpFile = bucket.file(fpPath);
+        const fpToken = crypto.randomUUID();
+        await fpFile.save(fpBuffer, {
+          metadata: {
+            contentType: "image/jpeg",
+            metadata: { firebaseStorageDownloadTokens: fpToken },
+          },
+        });
+        const fpUrl = `https://firebasestorage.googleapis.com/v0/b/${bucket.name}/o/${encodeURIComponent(fpPath)}?alt=media&token=${fpToken}`;
+        thumbnailUrl = fpUrl;
+        console.log(`[Save Product] 통이미지 업로드 완료: ${fpPath} (${(fpBuffer.length / 1024).toFixed(0)}KB)`);
+      } catch (fpErr) {
+        console.error("[Save Product] 통이미지 업로드 실패:", fpErr);
       }
     }
 
