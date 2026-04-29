@@ -394,30 +394,40 @@ exports.getDownloadUrl = withCorsLight(async (req, res) => {
       return res.status(404).json({ status: "error", message: "이미지 URL이 없습니다." });
     }
 
-    // 2. Storage 경로 추출
-    // thumbnailUrl 예시: https://firebasestorage.googleapis.com/v0/b/.../o/users%2Fuid%2FproductId%2Fimages%2Fsection_id.png?alt=media&token=...
+    // 2. 다운로드 대상 파일 결정
+    // 우선순위: 통이미지(fullpage.jpg) → images/ 하위 첫 번째 파일
     const storageBase = uid ? `users/${uid}` : "products";
     const bucket = storage.bucket();
-    
-    // thumbnailUrl에서 파일 경로 파싱 시도 (또는 productId 기반으로 유추)
-    // 여기선 productId와 첫 번째 이미지 파일명을 기반으로 경로를 구성 (저장 시 관례에 따라)
-    const folderPath = `${storageBase}/${productId}/images/`;
-    const [files] = await bucket.getFiles({ prefix: folderPath });
-    
-    if (files.length === 0) {
-      return res.status(404).json({ status: "error", message: "스토리지에서 이미지를 찾을 수 없습니다." });
+
+    let file = null;
+    const fullpagePath = `${storageBase}/${productId}/fullpage.jpg`;
+    const fullpageFile = bucket.file(fullpagePath);
+    const [fullpageExists] = await fullpageFile.exists();
+    if (fullpageExists) {
+      file = fullpageFile;
+    } else {
+      const folderPath = `${storageBase}/${productId}/images/`;
+      const [files] = await bucket.getFiles({ prefix: folderPath });
+      if (files.length === 0) {
+        return res.status(404).json({ status: "error", message: "스토리지에서 이미지를 찾을 수 없습니다." });
+      }
+      file = files[0];
     }
 
-    const file = files[0]; // 첫 번째 이미지를 다운로드 대상으로 함
+    // 3. 실제 파일 확장자 기준으로 Content-Type/파일명 결정
+    const fileName = file.name; // 예: users/uid/pid/fullpage.jpg
+    const ext = fileName.split('.').pop().toLowerCase();
+    const contentType = ext === 'jpg' || ext === 'jpeg' ? 'image/jpeg' : 'image/png';
+    const downloadName = `${(data.productName || 'image').replace(/[\/\\?%*:|"<>]/g, '_')}.${ext}`;
 
-    // 3. 서명된 URL 생성 (5분 유효, 강제 다운로드 설정)
+    // 4. 서명된 URL 생성 (5분 유효, 강제 다운로드 설정)
     const [signedUrl] = await file.getSignedUrl({
       version: 'v4',
       action: 'read',
       expires: Date.now() + 5 * 60 * 1000, // 5분
       prompt: false, // 브라우저 팝업 방지
-      responseType: 'image/png',
-      responseContentDisposition: `attachment; filename="${encodeURIComponent(data.productName || 'image')}.png"`,
+      responseType: contentType,
+      responseContentDisposition: `attachment; filename="${encodeURIComponent(downloadName)}"`,
     });
 
     console.log(`[Get Download URL] 서명된 URL 생성 완료: ${productId}`);
