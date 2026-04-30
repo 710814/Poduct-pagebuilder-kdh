@@ -22,8 +22,10 @@ import {
   restoreSettingsFromDrive,
   applyRestoredSettings
 } from './services/settingsBackupService';
-import { Loader2, Settings, HelpCircle, LogIn, LogOut, Images } from 'lucide-react';
+import { Loader2, Settings, HelpCircle, LogIn, LogOut, Images, Shield } from 'lucide-react';
 import { ProgressStepper } from './components/ProgressStepper';
+import { PendingApproval } from './components/PendingApproval';
+import { AdminPanel } from './components/AdminPanel';
 
 const AppContent: React.FC = () => {
   const [step, setStep] = useState<Step>(Step.SELECT_MODE);
@@ -36,11 +38,21 @@ const AppContent: React.FC = () => {
   // Settings Modal State
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
-  // 현재 뷰 (메인 생성 화면 vs 갤러리)
-  const [currentView, setCurrentView] = useState<'main' | 'gallery'>('main');
+  // 현재 뷰 (메인 생성 화면 vs 갤러리 vs 관리자)
+  const [currentView, setCurrentView] = useState<'main' | 'gallery' | 'admin'>('main');
 
   // Auth
-  const { user, loading: authLoading, signInWithGoogle, signOut, getIdToken } = useAuth();
+  const {
+    user,
+    loading: authLoading,
+    userStatus,
+    isAdmin,
+    isApproved,
+    signInWithGoogle,
+    signOut,
+    getIdToken,
+    refreshUserContext,
+  } = useAuth();
 
   // 자동저장 상태 (App 레벨에서 관리 — StepResult 언마운트/리마운트 시에도 1회만 실행)
   const [autoSaveStatus, setAutoSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
@@ -718,8 +730,8 @@ const AppContent: React.FC = () => {
               </div>
             )}
 
-            {/* 내 작업물 탭 (로그인 시에만 표시) */}
-            {!authLoading && user && (
+            {/* 내 작업물 탭 (승인된 사용자만) */}
+            {!authLoading && user && isApproved && (
               <button
                 onClick={() => setCurrentView(currentView === 'gallery' ? 'main' : 'gallery')}
                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
@@ -731,6 +743,22 @@ const AppContent: React.FC = () => {
               >
                 <Images className="w-4 h-4" />
                 <span className="hidden sm:inline-block">내 작업물</span>
+              </button>
+            )}
+
+            {/* 관리자 패널 (승인된 관리자만) */}
+            {!authLoading && user && isApproved && isAdmin && (
+              <button
+                onClick={() => setCurrentView(currentView === 'admin' ? 'main' : 'admin')}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                  currentView === 'admin'
+                    ? 'bg-indigo-100 text-indigo-700'
+                    : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100'
+                }`}
+                title="관리자 패널"
+              >
+                <Shield className="w-4 h-4" />
+                <span className="hidden sm:inline-block">관리자</span>
               </button>
             )}
 
@@ -788,7 +816,7 @@ const AppContent: React.FC = () => {
       </header>
 
       {/* Progress Stepper (모드 선택 단계 이후, 메인 뷰에서만 표시) */}
-      {currentView === 'main' && step > Step.SELECT_MODE && step <= Step.RESULT && mode !== AppMode.IMAGE_EDIT && (
+      {currentView === 'main' && isApproved && step > Step.SELECT_MODE && step <= Step.RESULT && mode !== AppMode.IMAGE_EDIT && (
         <div className="bg-white border-b border-gray-100 py-6 mb-2">
           <ProgressStepper
             currentStep={
@@ -802,12 +830,27 @@ const AppContent: React.FC = () => {
 
       {/* Main Content */}
       <main className="flex-1" style={{ minHeight: 'calc(100vh - 80px)' }}>
-        {/* 갤러리 뷰 */}
-        {currentView === 'gallery' && user && (
+        {/* 미승인 사용자: 승인 대기/회수 안내 */}
+        {!authLoading && user && userStatus && userStatus !== 'approved' && (
+          <PendingApproval
+            userStatus={userStatus}
+            userEmail={user.email || ''}
+            onRefresh={refreshUserContext}
+            onSignOut={signOut}
+          />
+        )}
+
+        {/* 관리자 패널 */}
+        {currentView === 'admin' && user && isApproved && isAdmin && (
+          <AdminPanel user={user} />
+        )}
+
+        {/* 갤러리 뷰 (승인된 사용자만) */}
+        {currentView === 'gallery' && user && isApproved && (
           <Gallery user={user} />
         )}
-        {/* 갤러리 뷰가 아닐 때만 생성 파이프라인 렌더링 */}
-        {currentView === 'main' && <>
+        {/* 메인 생성 파이프라인 — 승인됐거나 비로그인/로딩일 때만 */}
+        {currentView === 'main' && (!user || isApproved || authLoading) && <>
 
         {/* Step.GENERATING일 때 진행 상태 표시 */}
         {step === Step.GENERATING && analysisResult && (

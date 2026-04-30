@@ -22,6 +22,15 @@ const storage = admin.storage();
 // Gemini API 키 (Firebase Secrets에서 자동 주입)
 const geminiApiKey = defineSecret("GEMINI_API_KEY");
 
+// ============================================================
+// 부트스트랩 관리자 — 첫 로그인 시 이 이메일은 자동으로 approved+admin
+// (이미 users/{uid} 문서가 존재하면 적용되지 않음 — 기존 사용자는 관리자 패널에서 직접 변경)
+// ============================================================
+const BOOTSTRAP_ADMIN_EMAILS = [
+  "710814@gmail.com",
+  "yassada01@gmail.com",
+].map(e => e.toLowerCase());
+
 // CORS 미들웨어
 const corsMiddleware = cors({ origin: true });
 
@@ -50,6 +59,8 @@ exports.geminiProxy = withCors(async (req, res) => {
   if (req.method !== "POST") {
     return res.status(405).json({ status: "error", message: "Method not allowed" });
   }
+
+  if (!(await requireApproved(req, res))) return;
 
   try {
     const { model, contents, config } = req.body;
@@ -121,6 +132,120 @@ async function extractUid(req) {
   }
 }
 
+async function extractDecodedToken(req) {
+  const authHeader = req.headers.authorization || "";
+  if (!authHeader.startsWith("Bearer ")) return null;
+  const idToken = authHeader.split("Bearer ")[1];
+  try {
+    return await admin.auth().verifyIdToken(idToken);
+  } catch {
+    return null;
+  }
+}
+
+// ============================================================
+// 사용자 가드 — 승인 상태 / 관리자 권한 확인
+// 사용 패턴: const ctx = await requireApproved(req, res); if (!ctx) return;
+// 실패 시 res에 응답을 직접 쓰고 null 반환.
+// ============================================================
+async function requireApproved(req, res) {
+  const uid = await extractUid(req);
+  if (!uid) {
+    res.status(401).json({ status: "error", message: "로그인이 필요합니다." });
+    return null;
+  }
+  const snap = await db.collection("users").doc(uid).get();
+  if (!snap.exists) {
+    res.status(403).json({ status: "error", code: "NOT_REGISTERED", message: "사용자 등록이 필요합니다." });
+    return null;
+  }
+  const data = snap.data();
+  if (data.status !== "approved") {
+    res.status(403).json({
+      status: "error",
+      code: data.status === "pending" ? "PENDING_APPROVAL" : "ACCESS_REVOKED",
+      message: data.status === "pending" ? "관리자 승인 대기 중입니다." : "접속 권한이 회수되었습니다.",
+      userStatus: data.status,
+    });
+    return null;
+  }
+  return { uid, ...data };
+}
+
+async function requireAdmin(req, res) {
+  const ctx = await requireApproved(req, res);
+  if (!ctx) return null;
+  if (ctx.role !== "admin") {
+    res.status(403).json({ status: "error", code: "NOT_ADMIN", message: "관리자 권한이 필요합니다." });
+    return null;
+  }
+  return ctx;
+}
+
+// ============================================================
+// 1-b. 로그인 기록 — 사용자 doc upsert 후 상태/역할 반환
+// 클라이언트가 로그인 직후 호출. 신규 사용자는 status='pending'으로 생성.
+// ============================================================
+exports.recordLogin = withCorsLight(async (req, res) => {
+  if (req.method !== "POST") {
+    return res.status(405).json({ status: "error", message: "Method not allowed" });
+  }
+
+  const decoded = await extractDecodedToken(req);
+  if (!decoded) {
+    return res.status(401).json({ status: "error", message: "유효하지 않은 토큰입니다." });
+  }
+
+  try {
+    const ref = db.collection("users").doc(decoded.uid);
+    const snap = await ref.get();
+    const now = admin.firestore.FieldValue.serverTimestamp();
+
+    if (!snap.exists) {
+      const email = (decoded.email || "").toLowerCase();
+      const isBootstrapAdmin = BOOTSTRAP_ADMIN_EMAILS.includes(email);
+      const initStatus = isBootstrapAdmin ? "approved" : "pending";
+      const initRole = isBootstrapAdmin ? "admin" : "user";
+
+      await ref.set({
+        uid: decoded.uid,
+        email: decoded.email || "",
+        displayName: decoded.name || "",
+        photoURL: decoded.picture || "",
+        status: initStatus,
+        role: initRole,
+        createdAt: now,
+        lastLoginAt: now,
+      });
+      console.log(
+        isBootstrapAdmin
+          ? `[Record Login] 부트스트랩 관리자 자동 승격: ${email}`
+          : `[Record Login] 신규 사용자 등록 (pending): ${email || decoded.uid}`
+      );
+      return res.json({ status: "success", userStatus: initStatus, role: initRole, isNew: true });
+    }
+
+    // 기존 사용자: 메타 + lastLoginAt 갱신
+    await ref.update({
+      email: decoded.email || snap.data().email || "",
+      displayName: decoded.name || snap.data().displayName || "",
+      photoURL: decoded.picture || snap.data().photoURL || "",
+      lastLoginAt: now,
+    });
+
+    const data = snap.data();
+    return res.json({
+      status: "success",
+      userStatus: data.status,
+      role: data.role,
+      isNew: false,
+    });
+  } catch (error) {
+    console.error("[Record Login] 오류:", error);
+    return res.status(500).json({ status: "error", message: error.message });
+  }
+});
+
 // ============================================================
 // 2. 상품 데이터 저장 (Firestore + Storage)
 // ============================================================
@@ -129,8 +254,11 @@ exports.saveProduct = withCors(async (req, res) => {
     return res.status(405).json({ status: "error", message: "Method not allowed" });
   }
 
+  const ctx = await requireApproved(req, res);
+  if (!ctx) return;
+
   try {
-    const uid = await extractUid(req);
+    const uid = ctx.uid;
 
     const {
       timestamp, mode, productName, category, features,
@@ -281,10 +409,9 @@ exports.getProducts = withCorsLight(async (req, res) => {
     return res.status(405).json({ status: "error", message: "Method not allowed" });
   }
 
-  const uid = await extractUid(req);
-  if (!uid) {
-    return res.status(401).json({ status: "error", message: "로그인이 필요합니다." });
-  }
+  const ctx = await requireApproved(req, res);
+  if (!ctx) return;
+  const uid = ctx.uid;
 
   try {
     const snapshot = await db
@@ -322,10 +449,9 @@ exports.deleteProduct = withCorsLight(async (req, res) => {
     return res.status(405).json({ status: "error", message: "Method not allowed" });
   }
 
-  const uid = await extractUid(req);
-  if (!uid) {
-    return res.status(401).json({ status: "error", message: "로그인이 필요합니다." });
-  }
+  const ctx = await requireApproved(req, res);
+  if (!ctx) return;
+  const uid = ctx.uid;
 
   try {
     const productId = req.body.productId;
@@ -372,10 +498,9 @@ exports.getDownloadUrl = withCorsLight(async (req, res) => {
     return res.status(405).json({ status: "error", message: "Method not allowed" });
   }
 
-  const uid = await extractUid(req);
-  if (!uid) {
-    return res.status(401).json({ status: "error", message: "로그인이 필요합니다." });
-  }
+  const ctx = await requireApproved(req, res);
+  if (!ctx) return;
+  const uid = ctx.uid;
 
   try {
     const { productId } = req.body;
@@ -448,6 +573,8 @@ exports.getTemplates = withCorsLight(async (req, res) => {
     return res.status(405).json({ status: "error", message: "Method not allowed" });
   }
 
+  if (!(await requireApproved(req, res))) return;
+
   try {
     const snapshot = await db.collection("templates").orderBy("createdAt", "desc").get();
     const templates = [];
@@ -467,6 +594,8 @@ exports.saveTemplate = withCorsLight(async (req, res) => {
   if (req.method !== "POST") {
     return res.status(405).json({ status: "error", message: "Method not allowed" });
   }
+
+  if (!(await requireApproved(req, res))) return;
 
   try {
     const template = req.body;
@@ -494,6 +623,8 @@ exports.deleteTemplate = withCorsLight(async (req, res) => {
   if (req.method !== "DELETE" && req.method !== "POST") {
     return res.status(405).json({ status: "error", message: "Method not allowed" });
   }
+
+  if (!(await requireApproved(req, res))) return;
 
   try {
     const templateId = req.query.id || req.body.id;
@@ -560,6 +691,128 @@ exports.restoreSettings = withCorsLight(async (req, res) => {
     return res.json({ status: "success", settings });
   } catch (error) {
     console.error("[Restore Settings] 오류:", error);
+    return res.status(500).json({ status: "error", message: error.message });
+  }
+});
+
+// ============================================================
+// 5. 관리자 API
+// ============================================================
+
+const VALID_STATUSES = ["pending", "approved", "revoked"];
+const VALID_ROLES = ["user", "admin"];
+
+function tsToIso(ts) {
+  if (!ts) return "";
+  if (typeof ts.toDate === "function") return ts.toDate().toISOString();
+  return "";
+}
+
+// GET /adminListUsers - 전체 사용자 목록
+exports.adminListUsers = withCorsLight(async (req, res) => {
+  if (req.method !== "GET") {
+    return res.status(405).json({ status: "error", message: "Method not allowed" });
+  }
+
+  const adminCtx = await requireAdmin(req, res);
+  if (!adminCtx) return;
+
+  try {
+    const snapshot = await db.collection("users").orderBy("createdAt", "desc").get();
+    const users = [];
+    snapshot.forEach((doc) => {
+      const d = doc.data();
+      users.push({
+        uid: doc.id,
+        email: d.email || "",
+        displayName: d.displayName || "",
+        photoURL: d.photoURL || "",
+        status: d.status || "pending",
+        role: d.role || "user",
+        createdAt: tsToIso(d.createdAt),
+        lastLoginAt: tsToIso(d.lastLoginAt),
+      });
+    });
+
+    return res.json({ status: "success", users });
+  } catch (error) {
+    console.error("[Admin List Users] 오류:", error);
+    return res.status(500).json({ status: "error", message: error.message });
+  }
+});
+
+// POST /adminUpdateUserStatus - 사용자 상태 변경 (승인/회수)
+exports.adminUpdateUserStatus = withCorsLight(async (req, res) => {
+  if (req.method !== "POST") {
+    return res.status(405).json({ status: "error", message: "Method not allowed" });
+  }
+
+  const adminCtx = await requireAdmin(req, res);
+  if (!adminCtx) return;
+
+  try {
+    const { targetUid, status: newStatus } = req.body;
+
+    if (!targetUid || !VALID_STATUSES.includes(newStatus)) {
+      return res.status(400).json({ status: "error", message: "targetUid와 유효한 status가 필요합니다." });
+    }
+
+    if (targetUid === adminCtx.uid) {
+      return res.status(400).json({ status: "error", message: "본인의 상태는 변경할 수 없습니다." });
+    }
+
+    const targetRef = db.collection("users").doc(targetUid);
+    const targetSnap = await targetRef.get();
+    if (!targetSnap.exists) {
+      return res.status(404).json({ status: "error", message: "대상 사용자를 찾을 수 없습니다." });
+    }
+
+    await targetRef.update({
+      status: newStatus,
+      approvedBy: adminCtx.uid,
+      approvedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    console.log(`[Admin Update Status] ${targetUid}: ${newStatus} (by ${adminCtx.uid})`);
+    return res.json({ status: "success", message: "상태가 변경되었습니다." });
+  } catch (error) {
+    console.error("[Admin Update Status] 오류:", error);
+    return res.status(500).json({ status: "error", message: error.message });
+  }
+});
+
+// POST /adminUpdateUserRole - 사용자 역할 변경 (admin/user)
+exports.adminUpdateUserRole = withCorsLight(async (req, res) => {
+  if (req.method !== "POST") {
+    return res.status(405).json({ status: "error", message: "Method not allowed" });
+  }
+
+  const adminCtx = await requireAdmin(req, res);
+  if (!adminCtx) return;
+
+  try {
+    const { targetUid, role: newRole } = req.body;
+
+    if (!targetUid || !VALID_ROLES.includes(newRole)) {
+      return res.status(400).json({ status: "error", message: "targetUid와 유효한 role이 필요합니다." });
+    }
+
+    if (targetUid === adminCtx.uid) {
+      return res.status(400).json({ status: "error", message: "본인의 역할은 변경할 수 없습니다." });
+    }
+
+    const targetRef = db.collection("users").doc(targetUid);
+    const targetSnap = await targetRef.get();
+    if (!targetSnap.exists) {
+      return res.status(404).json({ status: "error", message: "대상 사용자를 찾을 수 없습니다." });
+    }
+
+    await targetRef.update({ role: newRole });
+
+    console.log(`[Admin Update Role] ${targetUid}: ${newRole} (by ${adminCtx.uid})`);
+    return res.json({ status: "success", message: "역할이 변경되었습니다." });
+  } catch (error) {
+    console.error("[Admin Update Role] 오류:", error);
     return res.status(500).json({ status: "error", message: error.message });
   }
 });

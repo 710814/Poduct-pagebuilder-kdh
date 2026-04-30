@@ -133,6 +133,45 @@ export interface ProductSummary {
 }
 
 // ============================================================
+// 사용자 컨텍스트 (승인 상태 / 역할)
+// ============================================================
+
+export type UserStatus = 'pending' | 'approved' | 'revoked';
+export type UserRole = 'user' | 'admin';
+
+export interface UserContext {
+  userStatus: UserStatus;
+  role: UserRole;
+  isNew: boolean;
+}
+
+/**
+ * 로그인 직후 호출 — 사용자 doc upsert 후 상태/역할 반환
+ */
+export const recordLogin = async (idToken: string): Promise<UserContext> => {
+  if (!FUNCTIONS_URL) throw new Error("FIREBASE_NOT_CONFIGURED");
+
+  const response = await fetch(`${FUNCTIONS_URL}/recordLogin`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${idToken}`,
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(`로그인 기록 실패 (${response.status})`);
+  }
+
+  const result = await response.json();
+  return {
+    userStatus: result.userStatus,
+    role: result.role,
+    isNew: !!result.isNew,
+  };
+};
+
+// ============================================================
 // 갤러리 API
 // ============================================================
 
