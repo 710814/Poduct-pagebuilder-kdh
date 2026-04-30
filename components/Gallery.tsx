@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { User } from 'firebase/auth';
 import { Loader2, Download, Trash2, Images, RefreshCw, X, CheckSquare, Square, Image as ImageIcon, Eye } from 'lucide-react';
-import { getUserProducts, deleteProduct, ProductSummary, getProductDownloadUrl } from '../services/firebaseService';
+import { getUserProducts, deleteProduct, ProductSummary } from '../services/firebaseService';
 import { toPng } from 'html-to-image';
 import { saveAs } from 'file-saver';
 
@@ -94,29 +94,31 @@ export const Gallery: React.FC<Props> = ({ user }) => {
 
   const handleDownloadLongImage = async (product: ProductSummary, e: React.MouseEvent) => {
     e.stopPropagation();
-    
-    // 이미 캡처된 통이미지(thumbnailUrl)가 있으면 바로 다운로드
+
+    // thumbnailUrl 자체가 token 포함된 공개 다운로드 URL이라 fetch→blob→saveAs로 직접 저장
     if (product.thumbnailUrl) {
       try {
         setIsCapturing(true);
-        const idToken = await user.getIdToken();
-        const signedUrl = await getProductDownloadUrl(product.productId, idToken);
-        
-        const a = document.createElement('a');
-        a.href = signedUrl;
-        a.style.display = 'none';
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
+        const response = await fetch(product.thumbnailUrl);
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const blob = await response.blob();
+        const ext = product.thumbnailUrl.toLowerCase().includes('.png') ? 'png' : 'jpg';
+        const safeName = product.productName.replace(/[\/\\?%*:|"<>]/g, '_');
+        saveAs(blob, `${safeName}_detail.${ext}`);
+        console.log('✅ [Gallery] 통이미지 다운로드 완료');
         return;
       } catch (err) {
         console.error('❌ [Gallery] 통이미지 다운로드 실패:', err);
+        // fetch 실패 시 새 탭에서 열어 사용자가 직접 저장하도록
+        window.open(product.thumbnailUrl, '_blank', 'noopener,noreferrer');
+        alert('직접 다운로드에 실패해 새 탭에서 열었습니다. 우클릭하여 저장해 주세요.');
+        return;
       } finally {
         setIsCapturing(false);
       }
     }
 
-    // fallback: 런타임 캡처 (기존에 캡처본 없이 저장된 경우 대비)
+    // 구버전 데이터 fallback: 런타임 캡처 (htmlContent 보유 시)
     if (!product.htmlContent) { alert('다운로드 가능한 데이터가 없습니다.'); return; }
     setIsCapturing(true);
     try {
@@ -166,27 +168,20 @@ export const Gallery: React.FC<Props> = ({ user }) => {
   const handleDownloadImage = async (product: ProductSummary, e: React.MouseEvent) => {
     e.stopPropagation();
     if (!product.thumbnailUrl) { alert('저장된 이미지가 없습니다.'); return; }
-    
+
     try {
-      console.log('🔵 [Gallery] 다운로드 URL 생성 요청 중...');
-      const idToken = await user.getIdToken();
-      const signedUrl = await getProductDownloadUrl(product.productId, idToken);
-      
-      // 서명된 URL을 iframe이나 a tag로 열어 다운로드 트리거
-      const a = document.createElement('a');
-      a.href = signedUrl;
-      // Signed URL 자체에 Content-Disposition이 포함되어 있어 download 속성 없이도 다운로드됨
-      a.style.display = 'none';
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      
-      console.log('✅ [Gallery] 다운로드 트리거 완료');
+      console.log('🔵 [Gallery] 이미지 다운로드 요청 중...');
+      const response = await fetch(product.thumbnailUrl);
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const blob = await response.blob();
+      const ext = product.thumbnailUrl.toLowerCase().includes('.png') ? 'png' : 'jpg';
+      const safeName = product.productName.replace(/[\/\\?%*:|"<>]/g, '_');
+      saveAs(blob, `${safeName}.${ext}`);
+      console.log('✅ [Gallery] 다운로드 완료');
     } catch (err: any) {
       console.error('❌ [Gallery] 다운로드 실패:', err);
-      // Fallback: 기존 방식 (새 탭에서 열기)
       window.open(product.thumbnailUrl, '_blank', 'noopener,noreferrer');
-      alert(`파일 다운로드에 실패했습니다. (사유: ${err.message || 'CORS 이슈'})\n새 탭에서 열린 이미지를 우클릭하여 저장해주세요.`);
+      alert(`직접 다운로드에 실패했습니다. (${err.message || 'CORS 이슈'})\n새 탭에서 열린 이미지를 우클릭하여 저장해주세요.`);
     }
   };
 

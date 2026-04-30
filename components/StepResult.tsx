@@ -496,7 +496,7 @@ export const StepResult = forwardRef<{ captureFullPage: () => Promise<string | n
 
           <button
             onClick={downloadHtml}
-            className="flex items-center px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-colors"
+            className="hidden items-center px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-colors"
           >
             <Code className="w-4 h-4 mr-2" />
             HTML 다운로드
@@ -905,7 +905,7 @@ export const StepResult = forwardRef<{ captureFullPage: () => Promise<string | n
                 navigator.clipboard.writeText(generateHTML());
                 toast.success('HTML 코드가 클립보드에 복사되었습니다.');
               }}
-              className="px-4 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg font-medium text-sm flex items-center gap-2 transition-colors"
+              className="hidden px-4 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg font-medium text-sm items-center gap-2 transition-colors"
             >
               <Copy className="w-4 h-4" />
               HTML 복사
