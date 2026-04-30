@@ -1,5 +1,5 @@
 import { AppMode, ProductAnalysis, SectionData, Template, ProductInputData } from "../types";
-import { getFunctionsUrl } from "./firebaseService";
+import { getFunctionsUrl, getCurrentIdToken } from "./firebaseService";
 import { getCategoryPromptGuidelines } from "./categoryPresets";
 import { getRandomizedLifestyleParams } from "./templateService";
 import type {
@@ -241,13 +241,15 @@ async function callGeminiViaProxy(requestData: {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), timeout);
 
+    const idToken = await getCurrentIdToken();
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (idToken) headers['Authorization'] = `Bearer ${idToken}`;
+
     let response: Response;
     try {
       response = await fetch(proxyUrl, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers,
         body: JSON.stringify({
           model: requestData.model,
           contents: requestData.contents,

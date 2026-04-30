@@ -1,5 +1,16 @@
 import { Template, SectionData, SectionType, LayoutType } from "../types";
 import { CATEGORY_PRESETS, CategoryPreset } from "./categoryPresets";
+import { getCurrentIdToken } from "./firebaseService";
+
+/**
+ * Cloud Functions 인증 헤더 생성 — 현재 로그인 사용자의 ID 토큰 부착
+ */
+const buildAuthHeaders = async (extra: Record<string, string> = {}): Promise<Record<string, string>> => {
+  const idToken = await getCurrentIdToken();
+  const headers: Record<string, string> = { ...extra };
+  if (idToken) headers['Authorization'] = `Bearer ${idToken}`;
+  return headers;
+};
 
 const TEMPLATE_STORAGE_KEY = 'gemini_commerce_templates';
 
@@ -84,7 +95,9 @@ export const getTemplates = async (): Promise<Template[]> => {
 
   if (FUNCTIONS_URL) {
     try {
-      const response = await fetch(`${FUNCTIONS_URL}/getTemplates`);
+      const response = await fetch(`${FUNCTIONS_URL}/getTemplates`, {
+        headers: await buildAuthHeaders(),
+      });
       if (response.ok) {
         const result = await response.json();
         if (result.status === 'success' && result.templates) {
@@ -127,7 +140,7 @@ export const saveTemplate = async (template: Template): Promise<void> => {
   try {
     const response = await fetch(`${FUNCTIONS_URL}/saveTemplate`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: await buildAuthHeaders({ 'Content-Type': 'application/json' }),
       body: JSON.stringify(template)
     });
     if (!response.ok) throw new Error(`Status: ${response.status}`);
@@ -144,7 +157,8 @@ export const deleteTemplate = async (id: string): Promise<void> => {
   if (!FUNCTIONS_URL) return;
   try {
     const response = await fetch(`${FUNCTIONS_URL}/deleteTemplate?id=${encodeURIComponent(id)}`, {
-      method: 'DELETE'
+      method: 'DELETE',
+      headers: await buildAuthHeaders(),
     });
     if (!response.ok) throw new Error(`Status: ${response.status}`);
   } catch (error) {

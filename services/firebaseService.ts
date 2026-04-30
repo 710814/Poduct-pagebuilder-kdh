@@ -6,6 +6,7 @@
  */
 
 import { ProductAnalysis, AppMode } from "../types";
+import { auth } from "../firebase";
 
 // Cloud Functions Base URL (빌드 타임 환경 변수에서 주입)
 const FUNCTIONS_URL = import.meta.env.VITE_CLOUD_FUNCTIONS_URL || '';
@@ -15,6 +16,14 @@ const FUNCTIONS_URL = import.meta.env.VITE_CLOUD_FUNCTIONS_URL || '';
  */
 export const getFunctionsUrl = (): string => {
   return FUNCTIONS_URL;
+};
+
+/**
+ * 현재 로그인 사용자의 Firebase ID 토큰 조회
+ * Cloud Functions 인증 가드(requireApproved)를 통과하기 위한 Authorization 헤더 용도
+ */
+export const getCurrentIdToken = async (): Promise<string | null> => {
+  return auth.currentUser ? await auth.currentUser.getIdToken() : null;
 };
 
 /**
